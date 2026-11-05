@@ -16,6 +16,8 @@
     "test:math": "tsx tools/dmath-test.ts",
     "dev": "vite",
     "build": "vite build",
+    "serve": "node serve.mjs",
+    "start": "node serve.mjs",
     "test:rollback": "tsx tools/rollback-test.ts tests/scenarios/versus.json",
     "worker:dev": "npm --prefix server run dev",
     "worker:deploy": "npm --prefix server run deploy",

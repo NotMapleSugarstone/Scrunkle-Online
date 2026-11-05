@@ -7,6 +7,7 @@ import type { Runtime } from '../engine/runtime.ts';
 const FADE_S = 0.025;
 /** Sounds at least this long follow the simulation clock. */
 const FOLLOW_MIN_S = 4;
+const SHORT_SOUND_S = 20;
 /** Drift under this is timing noise and is left alone. */
 const DEADBAND_S = 0.03;
 /** Drift over this is fixed by seeking rather than by playing slightly faster or slower. */
@@ -58,6 +59,7 @@ export class AudioOut {
   private loadState: Uint8Array[] = [];
   private urgent: [number, number][] = [];
   private background: [number, number][] = [];
+  private backgroundStarted = false;
   private loading = 0;
   /** One decode per file, because sprites share sound files. */
   private decoded = new Map<string, Promise<AudioBuffer>>();
@@ -79,11 +81,22 @@ export class AudioOut {
     this.files = rt.sprites.map((s) => s.sounds.map((d) => d.file));
     this.buffers = rt.sprites.map((s) => s.sounds.map(() => null));
     this.loadState = rt.sprites.map((s) => new Uint8Array(s.sounds.length));
-    // Short sounds load first: the page waits for them, and long ones can start late at the right place.
     this.durations = rt.sprites.map((s) => s.sounds.map((d) => d.sampleCount / d.rate));
-    this.background = rt.sprites.flatMap((s, si) => s.sounds.map((_, i) => [si, i] as [number, number]));
-    this.background.sort((a, b) => this.durations[a[0]][a[1]] - this.durations[b[0]][b[1]]);
+    this.backgroundStarted = false;
+    this.background = [];
     this.pump();
+  }
+
+  prefetchShort(): void {
+    if (this.backgroundStarted || this.loadState.length === 0) return;
+    this.backgroundStarted = true;
+    this.background = this.allJobs().filter(([si, i]) => this.durations[si][i] < SHORT_SOUND_S);
+    this.pump();
+  }
+
+  private allJobs(): [number, number][] {
+    const jobs = this.durations.flatMap((list, si) => list.map((_, i) => [si, i] as [number, number]));
+    return jobs.sort((a, b) => this.durations[a[0]][a[1]] - this.durations[b[0]][b[1]]);
   }
 
   private durations: number[][] = [];

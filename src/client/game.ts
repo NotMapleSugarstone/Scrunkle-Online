@@ -15,8 +15,7 @@ import { Bubbles, ListMonitors, PauseMenu, QuestionBox, VarMonitors } from './ov
 
 export const ASSET_BASE = `${import.meta.env.BASE_URL}assets/`;
 
-/** Sounds at least this long (the music) may finish loading after play starts, and then start at the right place. */
-const LONG_SOUND_S = 20;
+const MENU_SPRITES = new Set(['UI', 'Transition', 'Text', 'Border']);
 
 /**
  * The effect mixes to compile shaders for before play: every mix of the color, brightness and ghost effects the game
@@ -59,6 +58,10 @@ export class Game {
   bubbles: Bubbles;
   /** The port's pause menu, for a game with a pause rule. */
   pause: PauseMenu | null;
+  private prefetching = false;
+  private lastFighters = '';
+  private fighterSkins = new Map<number, number[]>();
+  private effectsQueued = false;
 
   constructor(
     public canvas: HTMLCanvasElement,
@@ -98,7 +101,57 @@ export class Game {
     this.audio.startLoading(this.rt, ASSET_BASE, (d, n) => ((counts.sounds = [d, n]), report()));
     masks = await loadMasks();
     installSilhouettes(this.rt, masks);
-    await Promise.all([this.renderer.loadNow(skins.map((_, i) => i)), this.audio.shortLoaded(LONG_SOUND_S)]);
+  }
+
+  startPrefetch(): void {
+    if (this.prefetching) return;
+    this.prefetching = true;
+    this.audio.prefetchShort();
+    const menu: number[] = this.rt.stage.sprite.costumes.filter((c) => /^stage/.test(c.name)).map((c) => c.skin);
+    for (const sprite of this.rt.sprites) {
+      if (sprite.def.isStage) continue;
+      if (sprite.name === 'MenuUI') {
+        for (const c of sprite.costumes) if (/^(portrait|stagei|GameSelect)/.test(c.name)) menu.push(c.skin);
+      } else if (MENU_SPRITES.has(sprite.name)) {
+        for (const c of sprite.costumes) menu.push(c.skin);
+      } else if (sprite.name === 'costumes') {
+        for (const c of sprite.costumes) if (!/^\d/.test(c.name)) menu.push(c.skin);
+      }
+    }
+    void this.renderer.loadNow(menu);
+    this.prefetchSelection();
+  }
+
+  private prefetchSelection(): void {
+    const stage = this.rt.stage as unknown as { l: { P_Char?: (number | string)[] } };
+    const list = stage.l.P_Char ?? [];
+    const ids = [...new Set([Number(list[0]), Number(list[1])])]
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .sort((a, b) => a - b);
+    const key = ids.join(',');
+    if (key === this.lastFighters) return;
+    this.lastFighters = key;
+    if (ids.length === 0) return;
+    if (this.fighterSkins.size === 0) this.collectFighterSkins();
+    const add: number[] = [];
+    for (const id of ids) add.push(...(this.fighterSkins.get(id) ?? []));
+    if (!this.effectsQueued) {
+      this.effectsQueued = true;
+      for (const sprite of this.rt.sprites) if (sprite.name === 'FX') for (const c of sprite.costumes) add.push(c.skin);
+    }
+    if (add.length > 0) void this.renderer.loadNow(add);
+  }
+
+  private collectFighterSkins(): void {
+    const sprite = this.rt.sprites.find((s) => s.name === 'costumes');
+    if (!sprite) return;
+    for (const c of sprite.costumes) {
+      const id = Number(/^(\d+)/.exec(c.name)?.[1]);
+      if (!Number.isFinite(id)) continue;
+      const list = this.fighterSkins.get(id);
+      if (list) list.push(c.skin);
+      else this.fighterSkins.set(id, [c.skin]);
+    }
   }
 
   step(inputs: PlayerInput[]): void {
@@ -114,6 +167,7 @@ export class Game {
     this.vars.update(this.rt);
     this.bubbles.update(this.rt);
     this.pause?.update(this.rt);
+    if (this.prefetching) this.prefetchSelection();
   }
 }
 

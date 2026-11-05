@@ -182,6 +182,7 @@ export class WebGLRenderer {
   /** Per skin: 0 not requested, 1 queued or loading, 2 loaded. */
   private loadState: Uint8Array = new Uint8Array(0);
   private urgent: number[] = [];
+  private immediate: number[] = [];
   private nextBackground = 0;
   private loading = 0;
   private loaded = 0;
@@ -198,6 +199,7 @@ export class WebGLRenderer {
     this.loadState = new Uint8Array(this.skins.length);
     for (const bits of [0, ...effects]) this.program(false, bits);
     this.program(true, 0);
+    this.nextBackground = this.skins.length;
     this.pump();
   }
 
@@ -230,16 +232,17 @@ export class WebGLRenderer {
     gl.disable(gl.SCISSOR_TEST);
   }
 
-  private want(i: number): void {
+  private want(i: number, priority = false): void {
     if (this.loadState.length === 0 || this.loadState[i] !== 0) return;
     this.loadState[i] = 1;
-    this.urgent.push(i);
+    (priority ? this.immediate : this.urgent).push(i);
     this.pump();
   }
 
   private pump(): void {
     while (this.loading < 16) {
-      let i = this.urgent.shift();
+      let i = this.immediate.shift();
+      if (i === undefined) i = this.urgent.shift();
       if (i === undefined) {
         while (this.nextBackground < this.skins.length && this.loadState[this.nextBackground] !== 0) this.nextBackground++;
         if (this.nextBackground >= this.skins.length) return;
@@ -268,7 +271,7 @@ export class WebGLRenderer {
     const skin = this.skins[skinIdx];
     const img = this.images[skinIdx];
     if (!img) {
-      this.want(skinIdx);
+      this.want(skinIdx, true);
       return this.emptyTex;
     }
     const gl = this.gl;

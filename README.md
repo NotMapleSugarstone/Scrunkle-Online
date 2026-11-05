@@ -1,10 +1,21 @@
 # SRT Executive Showdown
 
-A TypeScript browser port of SRT Executive Showdown 1.2 that plays frame for frame like the original project. The original's scripts are transpiled to TypeScript, and a reference runner compares the port with the original on every frame. Two players can fight on one keyboard or online, where rollback netcode keeps both browsers in step.
+一个 SRT Executive Showdown 1.2 的 TypeScript 浏览器移植版，逐帧表现得与原项目一致。原项目的脚本会被转译为 TypeScript，参考运行器会在每一帧将移植版与原项目进行比较。两名玩家可以在同一键盘上对战，也可以在线对战；在线时，回滚网络代码会让两个浏览器保持同步。
 
-## Play
+## 致谢与改动
 
-You need `node` 22 or later. On Windows, `play.cmd` installs what is missing and opens the game. Otherwise run these two commands and open the address the second one prints.
+本版本基于 [Scrunkle-Online](https://github.com/MapleSugarstone/Scrunkle-Online)。原版游戏、移植代码和美术资源均归功于该项目。
+
+本版本的改动：
+
+- **按需加载资源。** 离开大厅时不再获取整个菜单。页面会加载舞台背景、共享服装、核心菜单与选择界面美术、UI、文字、边框和短音效；卡牌、商店、奖励、过场动画及其他模式专用美术会在对应界面首次绘制时加载。每场比赛只额外加载所选战士、他们的特效和一首音乐。
+- **可见美术优先加载。** 当前画面正在绘制的图像会优先于后台预取，因此菜单不会排在战士、特效或其余菜单资源后面等待。
+- **默认关闭过场动画。** 游戏中的 **disable in-game cutscenes（禁用游戏内过场动画）** 设置默认开启。已有存档会执行一次迁移；在 **Settings（设置）** 中关闭该设置即可重新启用过场动画，过场动画的代码和资源没有改动。
+- 模拟、网络代码、存档格式和原始资源文件均未改动。
+
+## 游玩
+
+需要 `node` 22 或更高版本。Windows 上，`play.cmd` 会安装缺少的依赖并打开游戏。其他系统运行以下两条命令，然后打开第二条命令打印的地址。
 
 ```bash
 npm install
@@ -14,45 +25,45 @@ npm install
 npm run dev
 ```
 
-Choose **Play offline**. The game's own keys apply:
+选择 **Play offline（离线游玩）**。游戏原有按键如下：
 
-- Player 1: arrows move, N attacks, M uses a special, B shields and V pauses.
-- Player 2: W A S D move, F attacks, G uses a special, H shields and R pauses.
-- Menus: Player 1's keys. N selects, M goes back, and `.` and `,` change the song where the game offers it.
+- 玩家 1：方向键移动，N 攻击，M 使用特殊技，B 防御，V 暂停。
+- 玩家 2：W A S D 移动，F 攻击，G 使用特殊技，H 防御，R 暂停。
+- 菜单：使用玩家 1 的按键。N 确认，M 返回；游戏提供换歌功能时，用 `.` 和 `,` 切换歌曲。
 
-**Controls** in the lobby sets your own keys. On one computer they become Player 1's keys when the game starts, and the game's settings menu can still change them.
+大厅中的 **Controls（控制）** 可设置自己的按键。在同一台电脑上，游戏开始时这些按键会成为玩家 1 的按键；游戏内的设置菜单仍然可以更改它们。
 
-Controllers work in the standard layout. The left stick or the D-pad moves, A attacks and selects, B uses a special and goes back, X and Y jump, the shoulder buttons and triggers shield, and Back and Start pause. On one computer the first controller you use plays Player 1 and the next one plays Player 2. **Controls** names the controllers the browser sees once you press a button on one.
+手柄按标准布局工作。左摇杆或方向键移动，A 攻击和确认，B 使用特殊技和返回，X 和 Y 跳跃，肩键和扳机防御，Back 和 Start 暂停。在同一台电脑上，你使用的第一个手柄控制玩家 1，下一个控制玩家 2。**Controls（控制）** 会在你按下某个手柄的按钮后显示浏览器识别到的手柄。
 
-On touch screens a joystick and five buttons appear during play, beside the stage when the screen is wide and below it when the screen is tall. The joystick centers where your thumb lands. The controls hide while a controller is in use and come back at the next touch. **Touch controls** in the lobby turns them on or off, and the **Touch buttons** tab under **Controls** swaps what two buttons do.
+在触摸屏上，游玩时会出现一个摇杆和五个按钮；屏幕较宽时位于舞台旁边，屏幕较高时位于舞台下方。摇杆以你手指落下的位置为中心。使用手柄时触摸控件会隐藏，下一次触摸时重新出现。大厅中的 **Touch controls（触摸控制）** 可开启或关闭触摸控件；**Controls（控制）** 下的 **Touch buttons（触摸按钮）** 标签页可交换两个按钮的功能。
 
-**Leave game** under the stage goes back to the start screen. The page loads every image and short sound before **Play offline** turns on, as the original loads its whole project before it starts. The music keeps loading after that.
+舞台下方的 **Leave game（离开游戏）** 会返回开始界面。**Play offline（离线游玩）** 变为可用前，页面会加载碰撞遮罩和大厅自身的美术；离开大厅后，页面会加载共享菜单与选择界面美术以及短音效，界面专用美术在对应界面出现时加载，每场比赛只额外加载所选战士、他们的特效和一首音乐。过场动画默认关闭；如需启用，请在 **Settings（设置）** 中打开。
 
-**Display** on the start screen picks how the stage is drawn, and F2 picks the next mode at any time. **Smooth** draws at your screen's resolution. **Old flash game** draws at half the stage's size, dithers the picture to 256 colors and enlarges it. **Handheld** draws on a grid three quarters of the stage's size, turns every vector costume into a bitmap at that same scale, draws every costume with hard pixel edges and enlarges the result. The mode changes only the picture, so online players can each use a different one.
+开始界面的 **Display（显示）** 用于选择舞台的绘制方式，F2 可随时切换到下一个模式。**Smooth（平滑）** 以屏幕分辨率绘制。**Old flash game（旧 Flash 游戏）** 以舞台一半的大小绘制，将画面抖动为 256 色后再放大。**Handheld（掌机）** 以舞台四分之三大小的网格绘制，将每个矢量服装按相同比例转为位图，用硬像素边缘绘制每个服装，再放大结果。该模式只改变画面，因此在线玩家可以各自使用不同的模式。
 
-**Actually wear hats** on the start screen draws each fighter's hat on the fighter's head in every animation frame. The hat turns and flips with the fighter, gets the fighter's white outline, and is drawn with the fighter, so the other fighter can stand in front of it. Like **Display**, it changes only the picture.
+开始界面的 **Actually wear hats（真的戴上帽子）** 会让每个战士的帽子在每一帧动画中都戴在头上。帽子会随战士旋转和翻转，获得战士的白色轮廓，并与战士一起绘制，因此另一名战士可以站在帽子前面。与 **Display（显示）** 一样，它只改变画面。
 
-### Saves
+### 存档
 
-Your progress stays in this browser. In offline play the page keeps the game's save, settings and keybinds as they change, and puts them back the next time you play. The game's own save codes still work: the last row of **Settings** opens the save screen. **Save** downloads your code as `SRT Executive Showdown save.txt`. **Load** asks for a code: paste one, or choose the file button beside the answer box to open a saved `.txt` file. A loaded code becomes this browser's save. Art mode codes download and open the same way, as `SRT Executive Showdown art.txt`. Online games start from the game's own data on every computer, so all players start the same, and they never change your save.
+你的进度保存在此浏览器中。离线游玩时，页面会在游戏存档、设置和按键绑定发生变化时保存它们，并在下次游玩时恢复。游戏自带的存档代码仍然可用：**Settings（设置）** 的最后一行会打开存档界面。**Save（保存）** 会将你的代码下载为 `SRT Executive Showdown save.txt`。**Load（读取）** 会要求输入代码：粘贴代码，或使用输入框旁边的文件按钮打开保存的 `.txt` 文件。载入的代码会成为当前浏览器的存档。美术模式代码也以相同方式下载和打开，文件名为 `SRT Executive Showdown art.txt`。在线比赛每次都在每台电脑上从游戏自带数据开始，因此所有玩家起点相同，而且不会改变你的存档。
 
-### Replays
+### 回放
 
-After a match of 10 seconds or more, offline or online, the page asks whether to save a replay. **Replays** on the start screen lists them, renames and deletes them, and plays them with pause, frame steps, speeds and a seek bar. Its download button saves a replay as an MP4 video at 480p, 720p or 1080p, recorded while the replay plays once at normal speed, or as a `.meow` file. **Upload** adds `.meow` files from other players. A replay saved with another version of the game may not play the same, and the player says so when it stops matching.
+离线或在线比赛持续至少 10 秒后，页面会询问是否保存回放。开始界面的 **Replays（回放）** 会列出、重命名和删除回放，并支持暂停、逐帧、速度和进度条播放。其下载按钮可将回放保存为 480p、720p 或 1080p 的 MP4 视频（在回放以正常速度播放一次时录制），也可保存为 `.meow` 文件。**Upload（上传）** 可添加其他玩家的 `.meow` 文件。用另一个游戏版本保存的回放可能无法以相同方式播放；当回放不再匹配时，播放器会提示。
 
-## Online play
+## 在线对战
 
-Online games are peer to peer. Every player runs the whole game from the title screen, and inputs travel directly between browsers. A small room server in `server/` hands out room codes and passes the connection setup between players. It relays inputs only for a pair of players whose direct connection fails.
+在线比赛是对等连接。每个玩家都从标题界面运行完整游戏，输入直接在浏览器之间传输。`server/` 中的小型房间服务器负责发放房间代码，并在玩家之间传递连接设置。它只会在两名玩家的直连失败时中继输入。
 
-Before a player's first online game, the page says that playing online shares IP addresses with the other players in the room, because the connections are direct. Once they accept, that browser does not show it again.
+在玩家首次进行在线比赛前，页面会提示：在线游玩会与房间中的其他玩家共享 IP 地址，因为这些连接是直连的。接受后，该浏览器不再显示此提示。
 
-1. One player chooses **Host an online game** and shares the six-character room code.
-2. The other enters the code and chooses **Join**.
-3. The host picks the input delay and starts the game.
+1. 一名玩家选择 **Host an online game（创建在线游戏）** 并分享六位房间代码。
+2. 另一名玩家输入代码并选择 **Join（加入）**。
+3. 房主选择输入延迟并开始游戏。
 
-Your keys from **Controls** play your own player, so both players can use the same keys. In matches and on character select each player controls their own fighter. In the other menus both players' keys count as Player 1's, so either player can move through them. One frame of input delay (33 ms) suits most connections. Two frames give fewer visible corrections on links slower than about 100 ms.
+你在 **Controls（控制）** 中设置的按键控制你自己的角色，因此两名玩家可以使用相同按键。在比赛和角色选择界面，每名玩家控制自己的战士。在其他菜单中，两名玩家的按键都视为玩家 1 的按键，因此任一玩家都可以操作菜单。一帧输入延迟（33 毫秒）适合大多数连接。对于慢于约 100 毫秒的线路，两帧延迟可减少可见修正。
 
-To try online play on one computer, run `play online`, or run these in two terminals and open two tabs:
+要在一台电脑上试玩在线模式，运行 `play online`，或在两个终端中运行以下命令并打开两个标签页：
 
 ```bash
 npm --prefix server install
@@ -66,62 +77,62 @@ npm run worker:dev
 npm run dev
 ```
 
-The room server listens on port 8788, and the page forwards `/api` to it.
+房间服务器监听 8788 端口，页面会将 `/api` 转发给它。
 
-## Publishing
+## 发布
 
-The workflow in `.github/workflows/pages.yml` type-checks and builds the game and publishes `dist/` on every push to `main`. Set the repository's Pages source to GitHub Actions before the first push. The generated code and `public/assets` are committed, because building them needs the reference runner.
+`.github/workflows/pages.yml` 中的工作流会在每次推送到 `main` 时对游戏进行类型检查和构建，并发布 `dist/`。首次推送前，请将仓库的 Pages 来源设置为 GitHub Actions。生成的代码和 `public/assets` 已提交，因为构建它们需要参考运行器。
 
-To deploy the room server:
+部署房间服务器：
 
-1. Run `npx wrangler login` in `server/`, then `npm run worker:deploy` in the project root.
-2. Check that `<address>/api/health` answers with the protocol number.
-3. If the address differs from the one in `pages.yml`, put it there or in a repository variable named `RELAY_URL`.
+1. 在 `server/` 中运行 `npx wrangler login`，然后在项目根目录运行 `npm run worker:deploy`。
+2. 确认 `<地址>/api/health` 返回协议编号。
+3. 如果地址与 `pages.yml` 中的不同，请更新该文件，或设置名为 `RELAY_URL` 的仓库变量。
 
-`server/wrangler.toml` allows the published site's origin in `ALLOWED_ORIGINS`. Deploy the room server again whenever `src/net/protocol.ts` or `server/` changes.
+`server/wrangler.toml` 在 `ALLOWED_ORIGINS` 中允许已发布站点的来源。每当 `src/net/protocol.ts` 或 `server/` 发生变化时，请重新部署房间服务器。
 
-## Commands
+## 命令
 
-| Command | What it does |
+| 命令 | 作用 |
 |---|---|
-| `npm run extract` | Unpacks `game.sb3` into `sb3/`. |
-| `npm run decompile` | Prints every script as pseudocode into `out/dec/`. |
-| `npm run ref:dump` | Records costume data, vector images and touching masks from the original. |
-| `npm run transpile` | Writes `src/game/generated/` and `src/game/assets-data.json`. |
-| `npm run assets` | Writes `public/assets/`. |
-| `npx tsx tools/hat-anchors.ts [--sheets <dir>]` | Finds the head in every fighter costume and writes `src/game/hat-anchors.json` for **Actually wear hats**. `--sheets` draws each character's costumes with a hat and numbers them, for checking. Hand fixes go in `tools/hat-fixes.json`. |
-| `npm run typecheck` | Checks the types. |
-| `npm run ref:server` | Keeps the original loaded so parity runs skip its one-minute load. |
-| `npm run test:parity` | Runs every scenario in `tests/scenarios` against the original. |
-| `npx tsx tools/parity.ts <scenario>` | Compares the port with the original frame by frame and stops at the first difference. |
-| `npm run test:rollback` | Restores random earlier snapshots and checks that the re-simulated frames match a straight run, in the parity digest and in the hash online players compare. |
-| `npm run test:net` | Plays two simulated peers with latency, jitter and packet loss and checks they agree. Add `-- --replay` to record each peer's replays as an online page does and play them back. |
-| `npx tsx tools/replay-test.ts <scenario>` | Records the matches in a scenario as replays and checks that each plays back the same. |
-| `npx tsx tools/replay-check.ts <file>` | Plays a saved `.meow` file back and checks its state hashes, to tell which player's game diverged in a desync. |
-| `npx tsx tools/replay-perf.ts <file>` | Times a saved replay's frames, snapshot saves and loads, and lists the slowest frames. |
-| `npm run test:math` | Checks the portable math functions bit for bit. |
-| `bash tools/record-suite.sh` | Records the parity scenarios again by driving the port through the menus. |
-| `npx tsx tools/drive.ts "<tokens>" <name>` | Plays the port with a token script and saves the input as a scenario. The tokens are listed at the top of the file. |
-| `npx tsx tools/port-shots.ts <scenario> <frames>` | Saves frames of the port as images. |
-| `npx tsx tools/port-state.ts <scenario> <frames> [variables]` | Prints the screen, chosen variables and running scripts at chosen frames. |
-| `npx tsx tools/perf.ts <scenario>` | Reports milliseconds per frame, overall and during matches. |
-| `npx tsx tools/load-time.ts` | Times how long the built site takes to load until Play turns on, with an empty cache. |
+| `npm run extract` | 将 `game.sb3` 解包到 `sb3/`。 |
+| `npm run decompile` | 将每个脚本以伪代码打印到 `out/dec/`。 |
+| `npm run ref:dump` | 记录原项目的服装数据、矢量图像和碰撞遮罩。 |
+| `npm run transpile` | 写入 `src/game/generated/` 和 `src/game/assets-data.json`。 |
+| `npm run assets` | 写入 `public/assets/`。 |
+| `npx tsx tools/hat-anchors.ts [--sheets <dir>]` | 在每套战士服装中找到头部，并为 **Actually wear hats（真的戴上帽子）** 写入 `src/game/hat-anchors.json`。`--sheets` 会绘制每个角色的服装并戴上帽子、编号，以便检查。手动修正放在 `tools/hat-fixes.json`。 |
+| `npm run typecheck` | 检查类型。 |
+| `npm run ref:server` | 保持原项目加载，使一致性测试跳过其一分钟的加载。 |
+| `npm run test:parity` | 对原项目运行 `tests/scenarios` 中的每个场景。 |
+| `npx tsx tools/parity.ts <scenario>` | 逐帧比较移植版与原项目，并在第一处差异处停止。 |
+| `npm run test:rollback` | 恢复随机较早的快照，并检查重新模拟的帧与直接运行一致，包括一致性摘要和在线玩家比较的哈希。 |
+| `npm run test:net` | 用延迟、抖动和丢包模拟两个对等端，并检查它们是否一致。添加 `-- --replay` 可像在线页面一样记录每个对等端的回放并播放。 |
+| `npx tsx tools/replay-test.ts <scenario>` | 将场景中的比赛记录为回放，并检查每个回放是否以相同方式播放。 |
+| `npx tsx tools/replay-check.ts <file>` | 播放保存的 `.meow` 文件并检查其状态哈希，以判断在失步中哪个玩家的游戏发生了分歧。 |
+| `npx tsx tools/replay-perf.ts <file>` | 统计保存回放的帧、快照保存和加载时间，并列出最慢的帧。 |
+| `npm run test:math` | 逐位检查可移植数学函数。 |
+| `bash tools/record-suite.sh` | 通过驱动移植版菜单重新录制一致性场景。 |
+| `npx tsx tools/drive.ts "<tokens>" <name>` | 用令牌脚本游玩移植版，并将输入保存为场景。令牌列在文件顶部。 |
+| `npx tsx tools/port-shots.ts <scenario> <frames>` | 将移植版的帧保存为图像。 |
+| `npx tsx tools/port-state.ts <scenario> <frames> [variables]` | 打印所选帧的画面、选定变量和正在运行的脚本。 |
+| `npx tsx tools/perf.ts <scenario>` | 报告每帧的毫秒数，包括整体和比赛期间。 |
+| `npx tsx tools/load-time.ts` | 在空缓存下，统计构建后的网站加载到 **Play（开始）** 可用所需的时间。 |
 
-These tools need `npm run ref:server` running and help when parity fails. `tools/parity-steps.ts` finds the first thread step within a frame that leaves the two sides different. `tools/parity-probe.ts` compares every custom block call and its arguments within a frame, after `PROBE=1 npm run transpile`. `tools/ref-compiled.ts` prints the JavaScript the original's compiler made for a script. `tools/parity-ticks.ts` compares the order in which threads ran, and `tools/parity-pieces.ts` and `tools/parity-vars.ts` print differing values.
+这些工具需要先运行 `npm run ref:server`，并用于排查一致性测试失败。`tools/parity-steps.ts` 会找出在一帧内使两边出现差异的第一个线程步骤。`tools/parity-probe.ts` 会在 `PROBE=1 npm run transpile` 之后比较一帧内的每个自定义积木调用及其参数。`tools/ref-compiled.ts` 会打印原项目编译器为某个脚本生成的 JavaScript。`tools/parity-ticks.ts` 会比较线程运行的顺序，`tools/parity-pieces.ts` 和 `tools/parity-vars.ts` 会打印不同的值。
 
-## How the port works
+## 移植版工作原理
 
-| Folder | Contents |
+| 文件夹 | 内容 |
 |---|---|
-| `src/engine/` | The runtime: value casting, the thread scheduler, broadcasts, clones, layers, pen and sound models, renderer geometry, snapshots and portable math. |
-| `src/game/generated/` | One TypeScript module per sprite, generated from the project. |
-| `src/render/` | The WebGL renderer. |
-| `src/client/` | The page: keyboard, controllers and touch, audio, overlays, the lobby and the online session. |
-| `src/net/` | The room protocol, the rollback session, the peer links and the room client. |
-| `server/` | The room server. |
-| `tools/` | The transpiler, asset pipeline, parity and network tests, and project tools. |
-| `reference/` | The page that runs the original project for comparison. |
+| `src/engine/` | 运行时：值转换、线程调度器、广播、克隆、图层、画笔和声音模型、渲染器几何、快照和可移植数学。 |
+| `src/game/generated/` | 每个精灵一个 TypeScript 模块，由项目生成。 |
+| `src/render/` | WebGL 渲染器。 |
+| `src/client/` | 页面：键盘、手柄和触摸、音频、覆盖层、大厅和在线会话。 |
+| `src/net/` | 房间协议、回滚会话、对等端链接和房间客户端。 |
+| `server/` | 房间服务器。 |
+| `tools/` | 转译器、资源管线、一致性和网络测试以及项目工具。 |
+| `reference/` | 运行原项目以进行比较的页面。 |
 
-The project was made for a runtime with a 640 by 360 stage that compiles scripts to JavaScript. The reference runner uses that runtime, and the transpiler follows its compiled behavior where it differs from the interpreter: `and` and `or` stop early, number-like literals become numbers, loop counts and wait times are read once, and a custom block that ends in a sound or volume block returns to the next block of its caller.
+该项目是为一个 640×360 舞台、会将脚本编译为 JavaScript 的运行时制作的。参考运行器使用该运行时，转译器在解释器行为不同时遵循其编译后的行为：`and` 和 `or` 会提前停止，类似数字的字面量会变成数字，循环次数和等待时间只读取一次，以声音或音量积木结束的自定义积木会返回到调用者的下一个积木。
 
-The simulation is deterministic. Time advances 33 ms per frame, random numbers come from a seeded generator, and sine, cosine, arctangent, exponent and logarithm come from `src/engine/dmath.ts`, so every browser computes the same bits.
+模拟是确定性的。时间每帧推进 33 毫秒，随机数来自带种子的生成器，正弦、余弦、反正切、指数和对数来自 `src/engine/dmath.ts`，因此每个浏览器计算出的位都相同。

@@ -17,6 +17,7 @@ import { actionKeys, Pads } from './pads.ts';
 import { TouchControls } from './touch.ts';
 import { seatScreen } from '../game/screens.ts';
 import { pauseRule } from '../game/pause.ts';
+import { STORAGE_PREFIX } from '../game/page.ts';
 import { Mesh } from '../net/mesh.ts';
 import { report } from '../net/report.ts';
 import { BUILD, cancelRoom, hostRoom, joinRoom, onlineAvailable, RoomClient } from '../net/room-client.ts';
@@ -85,6 +86,7 @@ const resumeAudio = () => game.audio.resume();
 window.addEventListener('pointerdown', resumeAudio);
 window.addEventListener('keydown', resumeAudio);
 (window as unknown as { __game: Game }).__game = game;
+
 const pads = new Pads();
 const touch = new TouchControls(page, pads, fitStage);
 touchUi = touch;
@@ -161,12 +163,29 @@ let host = 0;
 let code = '';
 let hosting = false;
 
+const CUTSCENE_DEFAULT_KEY = `${STORAGE_PREFIX}.cutscenes-off`;
+function applyCutsceneDefault(rt: Game['rt']): void {
+  let first = false;
+  try {
+    first = localStorage.getItem(CUTSCENE_DEFAULT_KEY) === null;
+    if (first) localStorage.setItem(CUTSCENE_DEFAULT_KEY, '1');
+  } catch {
+    first = true;
+  }
+  if (!first) return;
+  const prop = rt.stage.sprite.def.listNames?.['!Global_GameSettings'];
+  const list = prop === undefined ? undefined : rt.stage.l[prop];
+  if (list && list.length > 4) list[4] = 1;
+}
+
 const lobby = new Lobby(overlay, {
   local() {
+    game.startPrefetch();
     lobby.hide();
     input.enabled = true;
     // The browser's save goes in first, and keys set under Controls replace Player 1's saved keys.
     loadSave(game.rt);
+    applyCutsceneDefault(game.rt);
     const own = savedControls();
     if (own) applyToPlayerOne(game.rt, own);
     touch.setPlaying(true);
@@ -207,6 +226,7 @@ const lobby = new Lobby(overlay, {
     }
     code = r.code ?? '';
     hosting = true;
+    game.startPrefetch();
     connect(r.room, name);
   },
   async join(name, c) {
@@ -222,6 +242,7 @@ const lobby = new Lobby(overlay, {
     }
     code = c;
     hosting = false;
+    game.startPrefetch();
     connect(r.room, name);
   },
   start(delay) {
@@ -352,6 +373,7 @@ function begin(start: StartInfo): void {
     lobby.setStatus('The game started without you.');
     return;
   }
+  game.startPrefetch();
   game.rt = Game.createRuntime({ seed: start.seed, t0: start.t0 });
   const names = new Map(seats.map((s) => [s.seat, s.name]));
   const hud = new Hud(page, () => backToStart(), overlay);
@@ -414,6 +436,9 @@ async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
 // Every image and sound loads and decodes behind the lobby before the play buttons enable.
 lobby.setLoading(true, 'Loading...');
 void game
-  .load((done, total) => lobby.setProgress(done, total))
-  .then(() => lobby.setLoading(false, ''))
+  .load(() => {})
+  .then(() => {
+    lobby.setProgress(1, 1);
+    lobby.setLoading(false, '');
+  })
   .catch((e) => lobby.setStatus(`Could not load the game: ${String(e)}`));
