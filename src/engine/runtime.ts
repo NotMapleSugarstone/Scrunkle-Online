@@ -1,6 +1,6 @@
-// The game runtime: targets, clones, the thread scheduler, broadcasts, pen and sound models.
-// Every rule here mirrors the original block runtime closely enough that the same inputs
-// produce the same state frame by frame.
+// 游戏运行时：角色目标、克隆体、线程调度器、广播、画笔与声音模型。
+// 这里的每条规则都尽量贴近原版积木运行时，使相同输入
+// 能逐帧产生相同状态。
 import { type Value, compare, toNumber, toStr, isInt, clamp, setListRandom } from './cast.ts';
 import { COMPILED, Ctl, STAGE_H, STAGE_W, STAGE_X, STAGE_Y, type HatKind, type ScriptDef, type SkinDef, type SpriteDef, type UnitFn } from './defs.ts';
 import { IoState, type PlayerInput } from './io.ts';
@@ -13,18 +13,17 @@ import { atan2, cos, sin } from './dmath.ts';
 import { keyArgToName } from './io.ts';
 
 /**
- * Time between frames, both on the simulation clock and in real time. The original steps from an
- * interval of 1000 / 30 ms, which browsers truncate to 33, and its timer reads real time, so its
- * frames are 33 ms apart in both senses.
+ * 帧间时间，同时用于模拟时钟和真实时间。原版以 1000 / 30 毫秒的间隔步进，
+ * 浏览器会截断为 33；其计时器读取真实时间，因此两种意义上的帧间隔都是 33 毫秒。
  */
 export const FRAME_MS = 33;
 const MAX_CLONES = 300;
 const DECAY_MS = 25;
 
-/** Thrown to abandon the current thread after it deleted its own clone. */
+/** 当线程删除自己的克隆体后，用此异常放弃当前线程。 */
 export const KILLED = { killed: true };
 
-/** A color to paint a sprite in: red, green and blue from 0 to 1, then the strength from 0 to 1. */
+/** 用于绘制角色的颜色：红、绿、蓝取 0 到 1，随后是 0 到 1 的强度。 */
 export type Tint = readonly [number, number, number, number];
 
 export type PenCmd =
@@ -32,9 +31,9 @@ export type PenCmd =
   | { op: 'line'; c4: [number, number, number, number]; d: number; x0: number; y0: number; x1: number; y1: number; point: boolean };
 
 export interface PenLayer {
-  /** Commands drawn since the last clear. Never mutated except by appending; a clear starts a new array. */
+  /** 自上次清空以来绘制的命令。除追加外绝不修改；清空会创建新数组。 */
   cmds: PenCmd[];
-  /** Bumped on every clear. */
+  /** 每次清空时递增。 */
   gen: number;
 }
 
@@ -44,7 +43,7 @@ export interface Question {
   target: Target;
 }
 
-/** Per-sprite module produced by the code generator. */
+/** 代码生成器为每个角色生成的模块。 */
 export interface SpriteModule {
   def: SpriteDef;
   build: (rt: Runtime) => { scripts: ScriptDef[] };
@@ -52,39 +51,39 @@ export interface SpriteModule {
 
 export interface RuntimeOptions {
   seed: number;
-  /** Simulation start time in ms since the epoch; also the base of the "current date" sensing block. */
+  /** 模拟开始时间，自 epoch 起的毫秒数；也是“当前日期”感知积木的基准。 */
   t0: number;
   tickCap?: number;
   pause?: PauseRule;
 }
 
 /**
- * A pause menu the original lacks, driven by ordinary key input so every player's simulation pauses on the
- * same frame. While paused no scripts run and the game clock stands still.
+ * 原版没有暂停菜单，此菜单由普通按键输入驱动，使每位玩家的模拟都在同一帧暂停。
+ * 暂停期间脚本不运行，游戏时钟也停止。
  */
 export interface PauseRule {
-  /** Pressing this key toggles the pause when `canPause` allows it. */
+  /** 当 `canPause` 允许时，按此键切换暂停。 */
   pauseKey: string;
-  /** Pressing this key while paused resumes and calls `quit`. */
+  /** 暂停时按此键恢复并调用 `quit`。 */
   quitKey: string;
-  /** What the quit button says, such as "Character select". */
+  /** 退出按钮显示的文字，例如“角色选择”。 */
   quitLabel: string;
   canPause(rt: Runtime): boolean;
   quit(rt: Runtime): void;
 }
 
 export class Runtime {
-  // ---------------------------------------------------------------- static data
+  // ---------------------------------------------------------------- 静态数据
   sprites: Sprite[] = [];
   units: UnitFn[] = [];
   unitNames: string[] = [];
   render: RenderModel;
 
-  // ---------------------------------------------------------------- state
+  // ---------------------------------------------------------------- 状态
   stage!: Target;
   targets: Target[] = [];
   executable: Target[] = [];
-  /** Sprite layer group of the draw list, back to front. */
+  /** 绘制列表中的角色图层分组，按从后到前排列。 */
   drawList: Target[] = [];
   penCreated = false;
   threads: Thread[] = [];
@@ -105,22 +104,22 @@ export class Runtime {
   answer = '';
   questions: Question[] = [];
   pen: PenLayer = { cmds: [], gen: 0 };
-  /** Bumped when a snapshot is loaded, so the renderer redraws the whole pen layer. */
+  /** 加载快照时递增，使渲染器重绘整个画笔层。 */
   penEpoch = 0;
   players: PlayerState[][] = [];
-  /** Threads whose promise-style wait resolves at the start of the next frame. */
+  /** 类似 Promise 的等待将在下一帧开始时完成的线程。 */
   pending: Thread[] = [];
   monitorVisible: Record<string, boolean> = {};
   pauseRule: PauseRule | null;
-  /** Whether the pause menu is open; see `PauseRule`. */
+  /** 暂停菜单是否打开；见 `PauseRule`。 */
   paused = false;
-  /** Frames spent paused, which the game clock leaves out. */
+  /** 暂停期间经过的帧数，游戏时钟不计入这些帧。 */
   pausedFrames = 0;
 
-  /** For tools: every thread step in a frame range as frame, tick, sprite, hat block id and status after the step. */
+  /** 供工具使用：帧范围内每次线程步进的帧、tick、角色、帽积木 id 和步进后的状态。 */
   trace: { from: number; to: number; log: unknown[][]; state?: () => unknown } | null = null;
 
-  /** Per-frame logs for parity reports and the audio output layer. */
+  /** 用于一致性报告和音频输出层的逐帧日志。 */
   frameLog: { pen: unknown[]; sound: unknown[] } = { pen: [], sound: [] };
   soundEvents: SoundEvent[] = [];
   logPen = false;
@@ -141,7 +140,7 @@ export class Runtime {
     });
     this.players = this.sprites.map((s) => s.sounds.map(() => newPlayer()));
 
-    // Targets in pane order; execution and draw order follow the saved layer order.
+    // 按窗格顺序排列的角色目标；执行与绘制顺序遵循保存的图层顺序。
     for (const sprite of this.sprites) {
       const t = this.makeOriginal(sprite);
       this.targets.push(t);
@@ -157,10 +156,10 @@ export class Runtime {
     });
   }
 
-  /** The procedure each unit runs, or null for a script, by unit index. */
+  /** 各单元运行的过程，按单元索引；脚本为 null。 */
   unitProcs: (string | null)[] = [];
 
-  /** Registers a resumable unit; generated modules call this while building. */
+  /** 注册可恢复单元；生成的模块在构建时调用。 */
   unit(name: string, proc: string | null, fn: UnitFn): number {
     this.units.push(fn);
     this.unitNames.push(name);
@@ -193,16 +192,16 @@ export class Runtime {
     return this.rng.next();
   }
 
-  // ---------------------------------------------------------------- frame loop
+  // ---------------------------------------------------------------- 帧循环
 
-  /** Runs one frame with the given per-player inputs. */
+  /** 使用给定的各玩家输入运行一帧。 */
   stepFrame(inputs: PlayerInput[]): void {
     this.frame++;
     this.frameLog = { pen: [], sound: [] };
     this.cloudOut = [];
     if (this.pauseRule && this.updatePause(this.pauseRule, inputs)) {
       this.pausedFrames++;
-      // Keys held during the pause are not new presses when it ends.
+      // 暂停期间按住的键在暂停结束时不算新按下。
       for (let p = 0; p < 4; p++) {
         this.io.keys[p].clear();
         for (const k of inputs[p]?.keys ?? []) this.io.keys[p].add(k);
@@ -218,11 +217,11 @@ export class Runtime {
     this.startTimerHats(lastMSecs);
     this.redrawRequested = false;
     this.stepThreads();
-    // Promise-style waits settle between frames, right after the frame that started them.
+    // 类似 Promise 的等待在帧之间完成，就在启动它的那一帧之后。
     this.resolvePending();
   }
 
-  /** Applies this frame's pause and quit presses; true while the game stays paused. */
+  /** 应用本帧的暂停与退出按键；游戏仍暂停时返回 true。 */
   private updatePause(rule: PauseRule, inputs: PlayerInput[]): boolean {
     const pressed = (key: string) => inputs.some((inp, p) => inp?.keys.includes(key) && !this.io.keys[p].has(key));
     if (this.paused && pressed(rule.quitKey)) {
@@ -245,7 +244,7 @@ export class Runtime {
       }
       if (inp.mouse) {
         const wasDown = this.io.mouseDown;
-        // The original clamps the pointer to the stage edges, and its y works out to -0 at the vertical center.
+        // 原版将指针限制在舞台边缘，其 y 在垂直中心恰好为 -0。
         this.io.mouseX = clamp(inp.mouse.x, -STAGE_X, STAGE_X);
         const y = clamp(inp.mouse.y, -STAGE_Y, STAGE_Y);
         this.io.mouseY = y === 0 ? -0 : y;
@@ -262,14 +261,14 @@ export class Runtime {
     for (const [target, id, items] of inputs[0]?.lists ?? []) {
       const t = target === 'Stage' ? this.stage : this.getSpriteTargetByName(target);
       const prop = t && Object.entries(t.sprite.def.listIds).find(([, v]) => v === id)?.[0];
-      // A new array, because snapshots may share the old one.
+      // 创建新数组，因为快照可能共享旧数组。
       if (t && prop) t.l[prop] = t.sprite.fixedLists.has(prop) ? Object.freeze([...items]) : [...items];
     }
   }
 
   /**
-   * Click hats, as the original's mouse handler starts them: for the sprite the renderer picks under the pointer,
-   * on the press for a sprite that is not draggable and on the release for one that is. Clicks off the stage do nothing.
+   * 点击帽，按原版鼠标处理器的启动方式：对渲染器在指针下选中的角色，
+   * 不可拖动的角色在按下时触发，可拖动的角色在释放时触发。舞台外点击无效果。
    */
   private mouseButton(down: boolean): void {
     const x = this.io.mouseX, y = this.io.mouseY;
@@ -278,7 +277,7 @@ export class Runtime {
     if (t.draggable ? !down : down) this.startHats('click', null, t);
   }
 
-  /** The renderer's pick: the topmost shown, not fully ghosted sprite whose mask covers the point, else the stage. */
+  /** 渲染器的拾取结果：指针下最上层、未完全透明且遮罩覆盖该点的角色，否则为舞台。 */
   private pickTarget(x: number, y: number): Target {
     for (let i = this.drawList.length - 1; i >= 0; i--) {
       const t = this.drawList[i];
@@ -290,12 +289,12 @@ export class Runtime {
     return this.stage;
   }
 
-  /** `reset timer`. */
+  /** `reset timer`。 */
   resetTimer(): void {
     this.timerStart = this.currentMSecs;
   }
 
-  /** The original starts key hats for the key and for "any" on every key-down event. */
+  /** 原版在每次 key-down 事件中为对应按键和“任意键”启动按键帽。 */
   private keyDown(name: string): void {
     this.startHats('key', keyArgToName(name).toUpperCase());
     this.startHats('key', 'ANY');
@@ -312,9 +311,9 @@ export class Runtime {
   }
 
   /**
-   * Timer hats, which the original starts at the start of every frame and tests at once. A hat whose script is
-   * still running is skipped. A test that is not newly true retires its thread before any thread steps.
-   * The original tests them before it advances its clock, so the test reads the previous frame's time.
+   * 计时器帽，原版在每帧开始时启动并立即测试。脚本仍在运行的帽子会被跳过。
+   * 测试结果不是新变为 true 时，会在任何线程步进前结束其线程。
+   * 原版在推进时钟前测试，因此测试读取的是上一帧的时间。
    */
   private startTimerHats(lastMSecs: number): void {
     for (let i = this.executable.length - 1; i >= 0; i--) {
@@ -336,17 +335,17 @@ export class Runtime {
     }
   }
 
-  // ---------------------------------------------------------------- cloud variables
+  // ---------------------------------------------------------------- 云变量
 
-  /** Cloud variable values this simulation set during the frame, for the page to send. */
+  /** 本帧中此模拟设置的云变量值，供页面发送。 */
   cloudOut: [string, string][] = [];
 
-  /** Records a cloud variable's new value after a set or change block. */
+  /** 在设置或改变积木后记录云变量的新值。 */
   cloudSet(name: string, value: Value): void {
     this.cloudOut.push([name, toStr(value)]);
   }
 
-  /** Sets a stage variable by name, as a cloud message from another player does when it arrives. */
+  /** 按名称设置舞台变量，如同其他玩家的云消息到达时。 */
   private cloudReceive(name: string, value: Value): void {
     const prop = this.stage.sprite.def.varNames?.[name];
     if (prop !== undefined) this.stage.v[prop] = value;
@@ -376,7 +375,7 @@ export class Runtime {
     return (this.currentMSecs - this.timerStart) / 1000;
   }
 
-  // ---------------------------------------------------------------- scheduler
+  // ---------------------------------------------------------------- 调度器
 
   stepThreads(): void {
     let numActive = Infinity;
@@ -477,9 +476,8 @@ export class Runtime {
   }
 
   /**
-   * Pushes a callee frame from resumable code. `pc`, `pcp` and `pcs` are the caller's resume labels, and `depth`
-   * is the number of branches around the call inside the caller. A non-warp call yields before the callee starts when
-   * the original's recursion test says so.
+   * 从可恢复代码压入被调用帧。`pc`、`pcp` 和 `pcs` 是调用者的恢复标签，`depth`
+   * 是调用者在调用点周围的分支数。若原版的递归测试要求，非 warp 调用会在被调用者开始前让出。
    */
   call(th: Thread, f: Frame, unit: number, args: Value[], warp: boolean, pc: number, pcp: number, pcs: number, depth = 0): Ctl {
     f.pc = pc;
@@ -488,7 +486,7 @@ export class Runtime {
     f.cd = depth;
     const proc = this.unitProcs[unit];
     const recursive = COMPILED
-      ? // The compiled code yields before a non-warp custom block calls itself directly, and on no other call.
+      ? // 编译代码仅在非 warp 自定义积木直接调用自身前让出，其他调用不会。
         !f.warp && proc !== null && proc === this.unitProcs[f.u]
       : !warp && this.isRecursiveCall(th, proc, depth);
     th.frames.push(newFrame(unit, warp, f.warp, args));
@@ -496,8 +494,8 @@ export class Runtime {
   }
 
   /**
-   * The interpreter's test: whether one of the 6 block stack entries below the call is a call to the same procedure.
-   * Each branch around a call holds one entry, and each frame below holds the call block that started the frame above.
+   * 解释器的测试：调用点下方 6 个积木栈条目中是否有对同一过程的调用。
+   * 调用点周围的每个分支占一个条目，下方每帧则保存启动上一帧的调用积木。
    */
   private isRecursiveCall(th: Thread, proc: string | null, depth: number): boolean {
     if (proc === null) return false;
@@ -509,7 +507,7 @@ export class Runtime {
     return false;
   }
 
-  /** Suspends the thread until the next frame starts (promise-style blocks). */
+  /** 将线程挂起到下一帧开始（类似 Promise 的积木）。 */
   suspend(th: Thread): Ctl {
     this.pending.push(th);
     return Ctl.Promise;
@@ -521,7 +519,7 @@ export class Runtime {
     for (const th of list) this.resolveThread(th);
   }
 
-  /** Applies a promise continuation: the thread resumes at the label its top frame set when it suspended. */
+  /** 应用 Promise 续体：线程在挂起时顶层帧设置的标签处恢复。 */
   private resolveThread(th: Thread): void {
     if (th.isKilled || th.orphan) return;
     th.status = STATUS_RUNNING;
@@ -543,9 +541,9 @@ export class Runtime {
     }
   }
 
-  // ---------------------------------------------------------------- hats and broadcasts
+  // ---------------------------------------------------------------- 帽子与广播
 
-  /** Broadcast and key hat names any sprite listens for, by kind, made on first use. */
+  /** 任意角色会监听的广播和按键帽名称，按种类在首次使用时创建。 */
   private listened: Record<'broadcast' | 'key', Set<string>> | null = null;
 
   startHats(kind: HatKind, msg: string | null, optTarget?: Target): Thread[] {
@@ -583,13 +581,13 @@ export class Runtime {
     this.startHats('broadcast', msg.toUpperCase());
   }
 
-  /** `broadcast and wait`, first step: the ids of the threads started, or null when none started. */
+  /** `broadcast and wait` 第一步：已启动线程的 id，未启动任何线程时为 null。 */
   broadcastStart(msg: Value): number[] | null {
     const started = this.startHats('broadcast', toStr(msg).toUpperCase());
     return started.length ? started.map((th) => th.id) : null;
   }
 
-  /** `broadcast and wait`, each step: how to yield while a started thread is still in the list, or null when done. */
+  /** `broadcast and wait` 每步：已启动线程仍在列表中时如何让出，完成时为 null。 */
   broadcastWait(ids: number[]): Ctl | null {
     const live = ids.map((id) => this.threads.find((th) => th.id === id));
     if (!live.some((th) => th !== undefined)) return null;
@@ -635,7 +633,7 @@ export class Runtime {
   }
 
   stopForTarget(t: Target, except: Thread | null): void {
-    // Listeners run first: waiting sounds stop, questions from this target are dropped.
+    // 先运行监听器：等待中的声音停止，此目标的问题被丢弃。
     for (const idx of t.waitingSounds) {
       const p = this.players[t.sprite.index][idx];
       if (p.owner === t) this.stopPlayer(t.sprite.index, idx);
@@ -653,7 +651,7 @@ export class Runtime {
     this.stopForTarget(t, th);
   }
 
-  // ---------------------------------------------------------------- targets, clones and layers
+  // ---------------------------------------------------------------- 目标、克隆体与图层
 
   getSpriteTargetByName(name: string): Target | undefined {
     for (const t of this.targets) {
@@ -713,7 +711,7 @@ export class Runtime {
     this.cloneCount++;
     const sprite = source.sprite;
     const c = new Target(this, sprite, this.nextTargetId++, false);
-    // Sound and pen state come from the sprite's original, not from the target that made the clone.
+    // 声音与画笔状态来自角色的原体，而不是创建克隆体的目标。
     const first = sprite.clones[0];
     sprite.clones.push(c);
     if (first.pen) c.pen = { ...first.pen, c4: [...first.pen.c4] as PenState['c4'] };
@@ -741,7 +739,7 @@ export class Runtime {
     this.setExecutablePosition(c, this.executable.indexOf(source));
   }
 
-  /** Deletes a clone; returns true when the running thread must stop. */
+  /** 删除克隆体；运行中的线程必须停止时返回 true。 */
   deleteClone(t: Target): boolean {
     if (t.isOriginal) return false;
     this.targets = this.targets.filter((x) => x !== t);
@@ -762,7 +760,7 @@ export class Runtime {
     if (t.visible) this.requestRedraw();
   }
 
-  /** `delete this clone` from generated code: stops the running thread if the clone was deleted. */
+  /** 生成代码中的 `delete this clone`：若克隆体已被删除，则停止当前线程。 */
   deleteThisClone(t: Target): void {
     if (this.deleteClone(t)) throw KILLED;
   }
@@ -788,7 +786,7 @@ export class Runtime {
     } else if (!(Number.isNaN(Number(v)) || (typeof v === 'string' && v.trim().length === 0))) stage.setCostume(Number(v) - 1);
   }
 
-  // ---------------------------------------------------------------- sensing
+  // ---------------------------------------------------------------- 感知
 
   touching(t: Target, what: Value): boolean {
     if (what === '_mouse_') return this.render.touchingPoint(t, this.io.mouseX, this.io.mouseY);
@@ -805,7 +803,7 @@ export class Runtime {
     return this.io.keyPressed(k);
   }
 
-  /** `go to`: the mouse, a random spot, or a sprite's original. */
+  /** `go to`：鼠标、随机位置或角色的原体。 */
   goTo(t: Target, to: Value): void {
     let x: number;
     let y: number;
@@ -824,7 +822,7 @@ export class Runtime {
     t.setXY(x, y);
   }
 
-  /** `glide`: the target's position at `elapsed` ms of a glide from (x0, y0) to (x1, y1) lasting `duration` ms. */
+  /** `glide`：滑行从 (x0, y0) 到 (x1, y1)、持续 `duration` 毫秒，返回 `elapsed` 毫秒时的位置。 */
   glideStep(t: Target, x0: number, y0: number, x1: number, y1: number, elapsed: number, duration: number): boolean {
     if (elapsed < duration) {
       const frac = elapsed / duration;
@@ -853,7 +851,7 @@ export class Runtime {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  /** `(property) of (sprite)`: motion and looks values, or a sprite's own variable by name. */
+  /** `(property) of (sprite)`：运动与外观值，或按名称读取角色自身变量。 */
   attributeOf(property: string, object: Value): Value {
     const o = object === '_stage_' ? this.stage : this.getSpriteTargetByName(toStr(object));
     if (!o) return 0;
@@ -878,7 +876,7 @@ export class Runtime {
     return prop === undefined ? 0 : o.v[prop];
   }
 
-  /** `if on edge, bounce`, from the drawn bounds. */
+  /** `if on edge, bounce`，基于绘制边界。 */
   ifOnEdgeBounce(t: Target): void {
     const b = this.render.bounds(t);
     const distLeft = Math.max(0, STAGE_X + b.left);
@@ -904,28 +902,28 @@ export class Runtime {
     t.setXY(fx, fy);
   }
 
-  /** The player's name for `username`; empty unless the page sets it. */
+  /** `username` 对应的玩家名称；除非页面设置，否则为空。 */
   username = '';
 
-  /** TypeScript versions of custom blocks, by `<sprite>/<proccode>`, that run in place of the transpiled blocks unless they return false. */
+  /** 自定义积木的 TypeScript 版本，按 `<sprite>/<proccode>` 索引；除非返回 false，否则替代转译积木运行。 */
   natives: Record<string, (t: Target, args: Value[]) => void | boolean> = {};
-  /** For tools, with code transpiled with PROBE=1: called as each custom block starts, with its arguments. */
+  /** 供工具使用，代码以 PROBE=1 转译时：每个自定义积木开始时以其参数调用。 */
   probe: ((proc: string, args: Value[]) => void) | null = null;
-  /** Transpiled custom blocks that tools can call, by `<sprite>/<proccode>`. */
+  /** 工具可调用的转译自定义积木，按 `<sprite>/<proccode>` 索引。 */
   procs: Record<string, (t: Target, args: Value[]) => void> = {};
 
-  /** Days since 2000-01-01 on the simulation clock, in UTC. */
+  /** 模拟时钟上自 2000-01-01 起的天数，使用 UTC。 */
   daysSince2000(): number {
     return (this.currentMSecs - Date.UTC(2000, 0, 1)) / 86400000;
   }
 
-  /** Speech bubbles by target id: the text and whether it is a thought. Only drawing reads them. */
+  /** 按目标 id 索引的对话气泡：文本及是否为思考。只有绘制会读取。 */
   bubbles: Record<number, string> = {};
   say(t: Target, message: Value): void {
     const text = toStr(message);
     if (text === '') delete this.bubbles[t.id];
     else this.bubbles[t.id] = text;
-    // Placing a bubble beside a shown sprite reads its hull bounds.
+    // 将气泡放在显示中的角色旁会读取其外壳边界。
     if (text !== '' && t.visible) this.render.computeHull(t);
   }
 
@@ -947,7 +945,7 @@ export class Runtime {
     return 0;
   }
 
-  /** `ask and wait`; returns Ctl.Promise after queuing the question. */
+  /** `ask and wait`；将问题入队后返回 Ctl.Promise。 */
   ask(th: Thread, t: Target, question: Value): Ctl {
     this.questions.push({ text: String(question), thread: th, target: t });
     return Ctl.Promise;
@@ -959,13 +957,13 @@ export class Runtime {
     if (q) this.pending.push(q.thread);
   }
 
-  /** The color a sprite and its pen stamps are painted in, from game state, or null. Only drawing reads it. */
+  /** 角色及其画笔图章使用的颜色，来自游戏状态，或 null。只有绘制会读取。 */
   tintOf: ((t: Target) => Tint | null) | null = null;
 
-  /** The target that made each pen stamp, kept only when the page sets it. Only drawing reads it. */
+  /** 每个画笔图章对应的创建目标，仅在页面设置时保留。只有绘制会读取。 */
   stampOwners: WeakMap<PenCmd, Target> | null = null;
 
-  // ---------------------------------------------------------------- operators
+  // ---------------------------------------------------------------- 运算符
 
   pickRandom(from: Value, to: Value): number {
     const nFrom = toNumber(from);
@@ -977,9 +975,9 @@ export class Runtime {
     return this.random() * (high - low) + low;
   }
 
-  // ---------------------------------------------------------------- monitors
+  // ---------------------------------------------------------------- 监视器
 
-  /** Variable monitors by property name, shown and hidden from code. */
+  /** 按属性名索引的变量监视器，由代码显示和隐藏。 */
   showVariable(prop: string): void {
     this.monitorVisible[`v:${prop}`] = true;
   }
@@ -994,7 +992,7 @@ export class Runtime {
     this.monitorVisible[prop] = false;
   }
 
-  // ---------------------------------------------------------------- pen
+  // ---------------------------------------------------------------- 画笔
 
   private ensurePenLayer(): void {
     this.penCreated = true;
@@ -1023,7 +1021,7 @@ export class Runtime {
       };
       const tint = this.tintOf?.(t);
       if (tint) cmd.tint = tint;
-      // The renderer works out the costume box itself; the hull box needs the simulation's hull state.
+      // 渲染器自行计算造型框；凸包外接框需要模拟的凸包状态。
       if (t.hullClean) cmd.clip = clip;
       this.pen.cmds.push(cmd);
       this.stampOwners?.set(cmd, t);
@@ -1046,7 +1044,7 @@ export class Runtime {
     this.requestRedraw();
   }
 
-  // ---------------------------------------------------------------- sound
+  // ---------------------------------------------------------------- 声音
 
   private soundIndex(t: Target, name: Value): number {
     const len = t.sprite.sounds.length;
@@ -1129,7 +1127,7 @@ export class Runtime {
     this.bankPlay(t, idx);
   }
 
-  /** `play sound until done`: returns true when the thread must suspend. */
+  /** `play sound until done`：线程必须挂起时返回 true。 */
   playUntilDone(th: Thread, t: Target, name: Value): boolean {
     const idx = this.soundIndex(t, name);
     if (idx < 0) return false;
@@ -1157,7 +1155,7 @@ export class Runtime {
     }
   }
 
-  /** Sound indices of a sprite in the order they were first played, as the original's bank walks them. */
+  /** 角色声音按首次播放顺序排列的索引，与原版声音库的遍历顺序一致。 */
   private bankOrder(si: number): number[] {
     const list = this.players[si];
     const idx: number[] = [];
@@ -1189,7 +1187,7 @@ export class Runtime {
     this.setVolume(t, toNumber(v) + t.volume);
   }
 
-  /** Sets or changes a sound effect; returns false when the effect name is unknown (no suspension then). */
+  /** 设置或更改声音效果；效果名称未知时返回 false（此时不挂起）。 */
   soundEffect(t: Target, effect: Value, v: Value, change: boolean): boolean {
     const name = toStr(effect).toLowerCase();
     const value = toNumber(v);
@@ -1226,7 +1224,7 @@ function stampLog(rt: Runtime, t: Target, cmd: Extract<PenCmd, { op: 'stamp' }>)
     cmd.dir,
     bits,
     (fx.color / 200) % 1,
-    // Logged as the reference logs it: a zero whirl without its sign.
+    // 按参考实现的记录方式记录：旋涡为零时不带符号。
     ((-fx.whirl * Math.PI) / 180) || 0,
     Math.abs(fx.pixelate) / 10,
     Math.max(-100, Math.min(fx.brightness, 100)) / 100,

@@ -1,5 +1,5 @@
-// Builds new blocks inside a project.json target and splices them into existing scripts, for script patches to
-// game.sb3 that the original editor then opens as if they had been made by hand.
+// 在 project.json 目标内构建新积木并将其拼入现有脚本，使游戏补丁脚本
+// 之后能被原编辑器打开，如同手工制作。
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +13,7 @@ type Costume = { name: string; bitmapResolution: number; dataFormat: string; ass
 type Sound = { name: string; assetId: string; dataFormat: string; rate: number; sampleCount: number; md5ext: string };
 export type Target = { name: string; isStage: boolean; blocks: Record<string, Block>; variables: Record<string, [string, unknown]>; lists: Record<string, [string, unknown[]]>; costumes: Costume[]; sounds: Sound[]; broadcasts?: Record<string, string> };
 
-/** Adds a vector costume to a sprite and its file to the project. */
+/** 向角色添加矢量造型，并向项目添加其文件。 */
 export function addSvgCostume(zip: JSZip, t: Target, name: string, svg: string, cx: number, cy: number): void {
   if (t.costumes.some((c) => c.name === name)) throw new Error(`${t.name} already has a costume ${name}`);
   const assetId = createHash('md5').update(svg).digest('hex');
@@ -22,8 +22,8 @@ export function addSvgCostume(zip: JSZip, t: Target, name: string, svg: string, 
 }
 
 /**
- * Gives a sprite a bitmap costume, replacing the image of a costume with that name where it has one so the costume
- * keeps its place. A file that no costume uses any more leaves the project.
+ * 为角色设置位图造型；若已有同名造型则替换其图像，使该造型保留位置。
+ * 不再被任何造型使用的文件会离开项目。
  */
 export function setPngCostume(zip: JSZip, project: Project, t: Target, name: string, png: Buffer, cx: number, cy: number, resolution = 2): void {
   const assetId = createHash('md5').update(png).digest('hex');
@@ -36,24 +36,24 @@ export function setPngCostume(zip: JSZip, project: Project, t: Target, name: str
   if (!project.targets.some((x) => x.costumes.some((c) => c.md5ext === old))) zip.remove(old);
 }
 
-/** Adds a sound to a sprite that plays the same file as an existing sound of the project. */
+/** 向角色添加声音，播放项目中已有声音所使用的同一文件。 */
 export function copySound(t: Target, name: string, from: Sound): void {
   if (t.sounds.some((s) => s.name === name)) throw new Error(`${t.name} already has a sound ${name}`);
   t.sounds.push({ ...from, name });
 }
 
-/** A stage or sprite list by name. */
+/** 按名称访问舞台或角色列表。 */
 export function listOf(t: Target, name: string): unknown[] {
   const hit = Object.values(t.lists).find((l) => l[0] === name);
   if (!hit) throw new Error(`no list ${name} in ${t.name}`);
   return hit[1];
 }
 export type Project = { targets: Target[]; monitors: Record<string, unknown>[] };
-/** A reporter block, a variable or list reporter, or a literal. */
+/** 报告器积木、变量或列表报告器，或字面量。 */
 export type Val = { id: string } | { prim: [12 | 13, string, string] } | string | number;
 export type Ref = [string, string];
 
-// Shadow types of the original's block format.
+// 原版积木格式中的 shadow 类型。
 const TEXT = 10, NUM = 4, WHOLE = 6, INT = 7;
 
 export async function loadGame(file = GAME_SB3): Promise<{ zip: JSZip; project: Project }> {
@@ -94,7 +94,7 @@ export class Blocks {
     return [2, v.id];
   }
 
-  /** Finds or adds a variable of this target and returns its name and id. */
+  /** 查找或添加此目标的变量，并返回其名称和 id。 */
   variable(name: string): Ref {
     const hit = Object.entries(this.t.variables).find(([, v]) => v[0] === name);
     if (hit) return [name, hit[0]];
@@ -102,7 +102,7 @@ export class Blocks {
     this.t.variables[id] = [name, 0];
     return [name, id];
   }
-  /** Finds or adds a list of this target and returns its name and id. */
+  /** 查找或添加此目标的列表，并返回其名称和 id。 */
   list(name: string): Ref {
     const hit = Object.entries(this.t.lists).find(([, v]) => v[0] === name);
     if (hit) return [name, hit[0]];
@@ -153,7 +153,7 @@ export class Blocks {
   abs(a: Val): Val {
     return { id: this.make('operator_mathop', { NUM: this.input(a, NUM) }, { OPERATOR: ['abs', null] }) };
   }
-  /** Defines a custom block and returns its definition block and argument ids. Chain the body after `def`. */
+  /** 定义自定义积木，并返回其定义块和参数 id。将主体链在 `def` 之后。 */
   procedure(proccode: string, argNames: string[], warp: boolean, x = 0, y = 0): { def: string; argIds: string[] } {
     const def = this.id();
     const proto = this.id();
@@ -170,7 +170,7 @@ export class Blocks {
     this.t.blocks[def] = Object.assign({ opcode: 'procedures_definition', next: null, parent: null, inputs: { custom_block: [1, proto] }, fields: {}, shadow: false, topLevel: true }, { x, y }) as Block;
     return { def, argIds };
   }
-  /** The id of a broadcast message, which the stage's list of messages gains when it is new. */
+  /** 广播消息的 id，新消息会加入舞台的消息列表。 */
   private message(stage: Target, name: string): string {
     const all = (stage.broadcasts ??= {});
     const hit = Object.entries(all).find(([, n]) => n === name);
@@ -179,7 +179,7 @@ export class Blocks {
     all[id] = name;
     return id;
   }
-  /** A script that starts when the stage broadcasts `name`. Chain the body after it. */
+  /** 舞台广播 `name` 时启动的脚本。将主体链在它之后。 */
   whenBroadcast(stage: Target, name: string, x = 0, y = 0): string {
     const id = this.make('event_whenbroadcastreceived', {}, { BROADCAST_OPTION: [name, this.message(stage, name)] });
     Object.assign(this.t.blocks[id], { topLevel: true, x, y });
@@ -188,11 +188,11 @@ export class Blocks {
   broadcast(stage: Target, name: string): string {
     return this.make('event_broadcast', { BROADCAST_INPUT: [1, [11, name, this.message(stage, name)]] });
   }
-  /** A block this class has no method for, with number inputs and fields. */
+  /** 此类没有专用方法的积木，使用数字输入和字段。 */
   op(opcode: string, numbers: Record<string, Val> = {}, fields: Record<string, unknown[]> = {}): string {
     return this.make(opcode, Object.fromEntries(Object.entries(numbers).map(([k, v]) => [k, this.input(v, NUM)])), fields);
   }
-  /** A call of a custom block with one value per argument. */
+  /** 自定义积木调用，每个参数一个值。 */
   call(proccode: string, argIds: string[], args: Val[], warp: boolean): string {
     const inputs: Record<string, unknown[]> = {};
     argIds.forEach((a, i) => { inputs[a] = this.input(args[i], TEXT); });
@@ -268,7 +268,7 @@ export class Blocks {
     return this.make('control_repeat', { TIMES: this.input(times, WHOLE), SUBSTACK: [2, this.chain(body)] });
   }
 
-  /** Links statement blocks into a stack and returns the first. */
+  /** 将语句积木连接成堆栈并返回第一个。 */
   chain(ids: string[]): string {
     ids.forEach((id, i) => {
       if (i > 0) {
@@ -278,7 +278,7 @@ export class Blocks {
     });
     return ids[0];
   }
-  /** Inserts a stack of new statements after the block `after`. */
+  /** 将新语句堆栈插入积木 `after` 之后。 */
   insertAfter(after: string, ids: string[]): void {
     const first = this.chain(ids);
     const last = ids[ids.length - 1];
@@ -289,7 +289,7 @@ export class Blocks {
     if (old) this.t.blocks[old].parent = last;
   }
 
-  /** The blocks of a script in order, following `next` and every substack. */
+  /** 按顺序列出脚本的积木，跟随 `next` 和每个子栈。 */
   walk(top: string): string[] {
     const out: string[] = [];
     const visit = (id: string | null) => {
@@ -304,7 +304,7 @@ export class Blocks {
     visit(top);
     return out;
   }
-  /** The text literal of an input, or of the shadow behind a reporter. */
+  /** 输入的文本字面量，或报告器背后的 shadow。 */
   literal(id: string, input: string): string | undefined {
     const v = this.t.blocks[id].inputs[input];
     const lit = (v?.[1] ?? null) as unknown;

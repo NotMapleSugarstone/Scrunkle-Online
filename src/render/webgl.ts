@@ -1,6 +1,6 @@
-// WebGL renderer for the port. It follows the original renderer's rules: vector costumes are
-// rasterized at power-of-two scales, bitmaps sample with nearest filtering, the pen layer is a
-// stage-sized texture shown with nearest filtering, and effects run in the fragment shader.
+// 移植版的 WebGL 渲染器。它遵循原渲染器的规则：矢量造型按
+// 2 的幂次比例栅格化，位图使用最近邻采样，画笔图层是一张
+// 舞台大小的纹理并用最近邻显示，效果在片元着色器中运行。
 import { STAGE_H, STAGE_W, STAGE_X, STAGE_Y, type SkinDef } from '../engine/defs.ts';
 import type { PenCmd, Runtime, Tint } from '../engine/runtime.ts';
 import { RenderModel } from '../engine/render-model.ts';
@@ -10,30 +10,30 @@ import { EFFECT_BITS, FRAGMENT, POST_VERTEX, QUANTIZE, UPSCALE, VERTEX } from '.
 
 const NATIVE_W = STAGE_W;
 const NATIVE_H = STAGE_H;
-/** Stage pixels per side of one pixel in the old flash game display mode. */
+/** 旧 Flash 游戏显示模式中一个像素对应的舞台像素数。 */
 const FLASH_DIVISOR = 2;
-/** The texture cache level of a vector costume's handheld image, which no power-of-two mip uses. */
+/** 矢量造型手持图像的纹理缓存级别，不使用 2 的幂次 mip。 */
 const HANDHELD_LEVEL = -1;
 
 /**
- * How the stage reaches the screen. `smooth` draws at the screen's resolution as the original does. `flash` draws at
- * the stage's size, halves it, dithers it to 256 colors and enlarges it. `handheld` draws on a grid smaller than the
- * stage (`handheldScale`), rasterizes each vector costume once at that same scale so a costume at its normal size
- * gets one texel per grid pixel, samples every costume with nearest filtering and enlarges the result.
+ * 舞台如何显示到屏幕。`smooth` 按原版以屏幕分辨率绘制。`flash` 按舞台大小绘制，
+ * 减半、抖动到 256 色再放大。`handheld` 在小于舞台的网格上绘制（`handheldScale`），
+ * 将每个矢量造型按同一比例栅格化一次，使正常大小的造型每个网格像素一个纹素，
+ * 所有造型都用最近邻采样，然后放大结果。
  */
 export type DisplayMode = 'smooth' | 'flash' | 'handheld';
 
-/** The pen commands from `from` on, in the order and form to draw them, for an option that changes only the picture. */
+/** 从 `from` 开始的画笔命令，按绘制所需的顺序和形式表示，用于只改变画面的选项。 */
 export type PenView = (rt: Runtime, cmds: readonly PenCmd[], from: number) => readonly PenCmd[];
 
-/** An offscreen image the display modes draw into. */
+/** 显示模式绘制到的离屏图像。 */
 interface Target {
   tex: WebGLTexture;
   fbo: WebGLFramebuffer;
   w: number;
   h: number;
 }
-/** Share of the remaining distance a smoothed stamp covers per drawn frame, and the jump (stage units) drawn at once. */
+/** 平滑图章在每个绘制帧覆盖剩余距离的比例，以及一次跳转的距离（舞台单位）。 */
 const SMOOTH_RATE = 0.45;
 const SMOOTH_SNAP = 90;
 const MIP_OFFSET = 8;
@@ -45,7 +45,7 @@ interface Program {
   aTex: number;
 }
 
-/** What a drawable needs to be drawn: a skin, a transform and effects. */
+/** 绘制一个可绘制对象所需的数据：皮肤、变换和效果。 */
 export interface DrawState {
   skin: number;
   x: number;
@@ -87,7 +87,7 @@ export class WebGLRenderer {
   private skins: SkinDef[];
   private geom: RenderModel;
   private images: (HTMLImageElement | ImageBitmap | null)[];
-  /** Per skin: mip level -> texture (vectors) or a single texture at index 0 (bitmaps). */
+  /** 按皮肤索引：mip 级别 -> 纹理（矢量），或索引 0 处的单一纹理（位图）。 */
   private textures: Map<number, WebGLTexture | null>[];
   private programs = new Map<string, Program>();
   private quadPos: WebGLBuffer;
@@ -95,20 +95,19 @@ export class WebGLRenderer {
   private linePos: WebGLBuffer;
   private penTex: WebGLTexture;
   private penFbo: WebGLFramebuffer;
-  /** Pen layer size in pixels: 480x360, or the canvas size with high quality pen. */
+  /** 画笔图层大小，以像素计：480x360，或开启高质量画笔时的画布大小。 */
   private penW = NATIVE_W;
   private penH = NATIVE_H;
-  /** Draws the pen layer at the canvas resolution instead of 480x360, so pen lines and stamps stay sharp when the stage is enlarged. */
+  /** 以画布分辨率而非 480x360 绘制画笔图层，使舞台放大时画笔线条和图章保持清晰。 */
   hqPen = false;
   /**
-   * Pen stamps of these skins are drawn eased toward their position instead of at it. Online, the
-   * other players' select cursors use this, because rollback corrections make them jump back.
-   * Only the picture changes, never the simulation.
+   * 这些皮肤的画笔图章会平滑移向目标位置，而不是直接画在那里。在线时其他玩家的
+   * 选择光标使用此功能，因为回滚修正会让它们向后跳。只改变画面，绝不改变模拟。
    */
   smoothSkins = new Set<number>();
   private smoothed = new Map<number, { x: number; y: number }>();
   private penView: PenView | null = null;
-  /** Skins of stamps on the pen layer that drew nothing because their images had not loaded. */
+  /** 画笔图层上因图像尚未加载而未绘制任何内容的图章皮肤。 */
   private penMissing = new Set<number>();
   private penArr: PenCmd[] | null = null;
   private penDrawn = 0;
@@ -117,9 +116,9 @@ export class WebGLRenderer {
   private mipCanvas = new Map<number, HTMLCanvasElement>();
   private display: DisplayMode = 'smooth';
   private targets = new Map<string, Target>();
-  /** Handheld mode's grid and vector costume size as a share of the stage's: 0.75 draws a 640x360 stage at 480x270. */
+  /** 手持模式的网格和矢量造型大小相对舞台的比例：0.75 将 640x360 舞台绘制为 480x270。 */
   handheldScale = 0.75;
-  /** One canvas for every handheld image, so the per-costume mip canvases keep the original's readback order. */
+  /** 所有手持图像共用一个画布，使每个造型的 mip 画布保持原版的回读顺序。 */
   private handheldCanvas: HTMLCanvasElement | null = null;
 
   constructor(canvas: HTMLCanvasElement, skins: SkinDef[]) {
@@ -176,10 +175,10 @@ export class WebGLRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   }
 
-  // ---------------------------------------------------------------- assets
+  // ---------------------------------------------------------------- 资源
 
   private base = '';
-  /** Per skin: 0 not requested, 1 queued or loading, 2 loaded. */
+  /** 按皮肤索引：0 未请求，1 已排队或加载中，2 已加载。 */
   private loadState: Uint8Array = new Uint8Array(0);
   private urgent: number[] = [];
   private immediate: number[] = [];
@@ -189,9 +188,9 @@ export class WebGLRenderer {
   private onProgress?: (done: number, total: number) => void;
 
   /**
-   * Starts loading costume images from `base`, the URL prefix of the assets folder, and compiles the shaders for
-   * `effects`. Each image's textures are made as it arrives, so the frame that first shows it does no decoding or
-   * uploading. A skin that is drawn before its image arrives loads next and draws nothing until then.
+   * 从 `base`（资源文件夹的 URL 前缀）开始加载造型图像，并为 `effects` 编译着色器。
+   * 每张图像到达时创建其纹理，因此首次显示它的帧无需解码或上传。图像到达前就被绘制的皮肤
+   * 会接下来加载，在此之前绘制为空白。
    */
   startLoading(base: string, effects: number[], onProgress?: (done: number, total: number) => void): void {
     this.base = base;
@@ -203,7 +202,7 @@ export class WebGLRenderer {
     this.pump();
   }
 
-  /** Resolves once the given skins are loaded, for the first screen. */
+  /** 给定皮肤加载完成后 resolve，用于首屏。 */
   loadNow(skins: number[]): Promise<void> {
     for (const i of skins) this.want(i);
     return new Promise((resolve) => {
@@ -212,13 +211,13 @@ export class WebGLRenderer {
     });
   }
 
-  /** Each returns true once its skins have loaded, and is then dropped. */
+  /** 每个在其皮肤加载完成后返回 true，随后被移除。 */
   private waiters: (() => boolean)[] = [];
 
   /**
-   * Makes a skin's texture at the canvas's current scale by drawing it once into one pixel, so the driver uploads the
-   * image now rather than on the frame that first shows it. A vector skin gets the mip for its normal size, and
-   * other sizes are made when first drawn, as in the original.
+   * 按画布当前比例制作皮肤纹理，方法是将它绘制到一个像素中，使驱动现在上传图像，
+   * 而不是等到首次显示它的帧。矢量皮肤获得其正常大小对应的 mip，其他大小在首次绘制时制作，
+   * 与原版一致。
    */
   private prepare(i: number): void {
     const gl = this.gl;
@@ -266,7 +265,7 @@ export class WebGLRenderer {
     }
   }
 
-  /** Texture for a skin at a draw scale (percent), creating vector mips on demand. */
+  /** 皮肤在绘制比例（百分比）下的纹理，按需创建矢量 mip。 */
   private skinTexture(skinIdx: number, scaleX: number, scaleY: number): WebGLTexture {
     const skin = this.skins[skinIdx];
     const img = this.images[skinIdx];
@@ -292,7 +291,7 @@ export class WebGLRenderer {
         cache.set(level, null);
         return this.emptyTex;
       }
-      // A whole number of pixels on each side, stretched to fill the costume's box when drawn.
+      // 每边为整数像素，绘制时拉伸以填满造型框。
       const c = (this.handheldCanvas ??= document.createElement('canvas'));
       c.width = Math.max(1, Math.round(skin.w * this.handheldScale));
       c.height = Math.max(1, Math.round(skin.h * this.handheldScale));
@@ -303,8 +302,8 @@ export class WebGLRenderer {
       ctx.drawImage(img, 0, 0);
       source = ctx.getImageData(0, 0, c.width, c.height);
     } else if (skin.kind === 'svg') {
-      // One canvas per costume, used for its mips in the same order as the original renderer: the
-      // browser moves a canvas to its CPU rasterizer after a few readbacks, which antialiases differently.
+      // 每个造型一个画布，按原渲染器的顺序用于其 mip：
+      // 浏览器在几次回读后会把画布交给 CPU 栅格化器，其抗锯齿结果不同。
       let c = this.mipCanvas.get(skinIdx);
       if (!c) {
         c = document.createElement('canvas');
@@ -342,7 +341,7 @@ export class WebGLRenderer {
     return ax > 99 && ax < 101 && ay > 99 && ay < 101;
   }
 
-  // ---------------------------------------------------------------- programs
+  // ---------------------------------------------------------------- 程序
 
   private program(line: boolean, bits: number): Program {
     const key = `${line ? 'L' : 'S'}${bits}`;
@@ -358,7 +357,7 @@ export class WebGLRenderer {
     return p;
   }
 
-  /** The program for a display mode pass, compiled on first use. */
+  /** 显示模式通道使用的程序，首次使用时编译。 */
   private postProgram(fragment: string): Program {
     const cached = this.programs.get(fragment);
     if (cached) return cached;
@@ -389,9 +388,9 @@ export class WebGLRenderer {
     return p.uni.get(name)!;
   }
 
-  // ---------------------------------------------------------------- drawing
+  // ---------------------------------------------------------------- 绘制
 
-  /** Draws one drawable with the given projection; `fbScaleX/Y` convert stage units to target pixels. */
+  /** 用给定投影绘制一个可绘制对象；`fbScaleX/Y` 将舞台单位转换为目标像素。 */
   private drawSprite(d: DrawState, projection: Float32Array, fbScaleX: number, fbScaleY: number): void {
     const gl = this.gl;
     const skin = this.skins[d.skin];
@@ -430,7 +429,7 @@ export class WebGLRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
-  /** Draws a pen line. `s` is pen pixels per stage unit, so the shader's one-unit antialiased edge is one pixel. */
+  /** 绘制一条画笔线条。`s` 是每舞台单位的画笔像素数，因此着色器中一单位宽的抗锯齿边缘就是一像素。 */
   private drawLine(cmd: Extract<PenCmd, { op: 'line' }>, s: number): void {
     const gl = this.gl;
     const p = this.program(true, 0);
@@ -470,7 +469,7 @@ export class WebGLRenderer {
       d.x = p.x;
       d.y = p.y;
     }
-    // Stamping first asks for the 100% texture (the original checks the stamp bounds with it).
+    // 图章会先请求 100% 纹理（原版用它检查图章边界）。
     this.skinTexture(cmd.skin, 100, 100);
     if (this.loadState[cmd.skin] !== 2) this.penMissing.add(cmd.skin);
     const b = cmd.clip ?? stampBounds(this.geom, this.skins[cmd.skin], d);
@@ -481,20 +480,20 @@ export class WebGLRenderer {
       this.drawSprite(d, this.penFlip, s, this.penH / NATIVE_H);
       return;
     }
-    // A viewport and projection covering only the stamp's bounds, as the original does; using the
-    // full layer with a scissor rasterizes edges slightly differently.
+    // 与原版一样，视口和投影只覆盖图章的边界；使用
+    // 整个图层加剪刀测试时，边缘栅格化结果会略有不同。
     gl.disable(gl.SCISSOR_TEST);
     gl.viewport(NATIVE_W / 2 + b.left, NATIVE_H / 2 - b.top, b.right - b.left, b.top - b.bottom);
     this.drawSprite(d, ortho(b.left, b.right, b.top, b.bottom), 1, 1);
   }
 
-  /** Brings the pen texture up to date with the simulation's command list. */
+  /** 使画笔纹理与模拟的命令列表保持一致。 */
   private syncPen(rt: Runtime): void {
     const gl = this.gl;
     const cmds = rt.pen.cmds;
     const resized = this.sizePen();
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.penFbo);
-    // A stamp drawn before its image arrived drew nothing, so the layer redraws once that image has loaded.
+    // 图像到达前绘制的图章没有画出内容，因此该图像加载后会重绘画笔图层。
     const arrived = [...this.penMissing].some((s) => this.loadState[s] === 2);
     if (resized || cmds !== this.penArr || this.penDrawn > cmds.length || rt.penEpoch !== this.penEpoch || arrived) {
       gl.viewport(0, 0, this.penW, this.penH);
@@ -514,7 +513,7 @@ export class WebGLRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
-  /** Moves a smoothed stamp's drawn position part of the way to its real one, or straight there after a big jump. */
+  /** 将平滑图章的绘制位置向真实位置移动一部分，大幅跳转后则直接移动过去。 */
   private ease(skin: number, x: number, y: number): { x: number; y: number } {
     const p = this.smoothed.get(skin);
     if (!p || Math.hypot(x - p.x, y - p.y) > SMOOTH_SNAP) {
@@ -527,7 +526,7 @@ export class WebGLRenderer {
     return p;
   }
 
-  /** Resizes the pen texture to match the current setting and canvas. The command list then redraws it at the new size. */
+  /** 将画笔纹理调整为当前设置和画布大小，随后命令列表会按新大小重绘。 */
   private sizePen(): boolean {
     const hq = this.hqPen && this.display === 'smooth';
     const [gw, gh] = this.stageGrid();
@@ -544,26 +543,26 @@ export class WebGLRenderer {
 
   private stageProj = ortho(-NATIVE_W / 2, NATIVE_W / 2, -NATIVE_H / 2, NATIVE_H / 2);
 
-  /** Draws the pen layer through `view` from now on, or straight from the commands with null, and redraws it. */
+  /** 从今以后通过 `view` 绘制画笔图层；为 null 时直接从命令绘制，并重绘。 */
   setPenView(view: PenView | null): void {
     this.penView = view;
     this.penArr = null;
   }
 
-  /** Changes how the stage reaches the screen. The pen layer redraws under the new mode's costume rules. */
+  /** 更改舞台显示到屏幕的方式。画笔图层会按新模式下的造型规则重绘。 */
   setDisplay(mode: DisplayMode): void {
     if (mode === this.display) return;
     this.display = mode;
     this.penArr = null;
   }
 
-  /** The pixel size the display modes draw the stage at: the stage's own size, or handheld mode's smaller grid. */
+  /** 显示模式绘制舞台所用的像素尺寸：舞台自身大小，或手持模式更小的网格。 */
   private stageGrid(): [number, number] {
     const s = this.display === 'handheld' ? this.handheldScale : 1;
     return [Math.round(NATIVE_W * s), Math.round(NATIVE_H * s)];
   }
 
-  /** Draws the current simulation state to the canvas. */
+  /** 将当前模拟状态绘制到画布。 */
   render(rt: Runtime): void {
     const gl = this.gl;
     this.syncPen(rt);
@@ -587,7 +586,7 @@ export class WebGLRenderer {
     if (stageImage) this.finishDisplay(stageImage);
   }
 
-  /** Takes the stage image from its offscreen target to the canvas through the display mode's passes. */
+  /** 通过显示模式的通道将舞台图像从离屏目标输出到画布。 */
   private finishDisplay(stageImage: Target): void {
     const gl = this.gl;
     let src = stageImage;
@@ -621,7 +620,7 @@ export class WebGLRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
-  /** An offscreen image with linear filtering, made on first use and remade when its size changes. */
+  /** 使用线性过滤的离屏图像，首次使用时创建，大小改变时重建。 */
   private target(name: string, w: number, h: number): Target {
     const gl = this.gl;
     const hit = this.targets.get(name);
@@ -660,7 +659,7 @@ export class WebGLRenderer {
     gl.uniform1i(this.loc(p, 'u_skin'), 0);
     gl.uniformMatrix4fv(this.loc(p, 'u_projectionMatrix'), false, this.stageProj);
     const m = new Float32Array(16);
-    // Pen skin: 480x360 with its center at the stage origin, direction 90, scale 100.
+    // 画笔皮肤：480x360，中心位于舞台原点，方向 90，大小 100。
     m[0] = -NATIVE_W;
     m[5] = -NATIVE_H;
     m[10] = 1;
@@ -690,7 +689,7 @@ export function drawStateOf(t: import('../engine/target.ts').Target, tint: Tint 
   };
 }
 
-/** Model matrix with the same 32-bit float storage as the simulation's geometry. */
+/** 与模拟几何相同的 32 位浮点存储的模型矩阵。 */
 function modelMatrix(skin: SkinDef, d: DrawState): Float32Array {
   const f = Math.fround;
   const rotation = ((270 - d.dir) * Math.PI) / 180;
@@ -745,12 +744,12 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return imageFrom(url, true);
 }
 
-/** Longest wait for `decode()`, which never settles while the page is not rendering, as in a background tab. */
+/** `decode()` 的最长等待时间；页面不渲染时（如后台标签页）它永不结束。 */
 const DECODE_WAIT_MS = 250;
 
 /**
- * Loads an image. With `decode`, the browser also decodes it off the main thread, so the texture upload does not.
- * The upload still premultiplies the pixels itself, as the original's does, which keeps edge pixels the same.
+ * 加载图像。使用 `decode` 时浏览器还会在主线程外解码，因此纹理上传无需解码。
+ * 上传仍会像原版一样自行预乘像素，使边缘像素保持一致。
  */
 function imageFrom(url: string, decode = false): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -768,12 +767,12 @@ function imageFrom(url: string, decode = false): Promise<HTMLImageElement> {
   });
 }
 
-/** Font data shared between vector costumes, by the id tools/assets.ts gave it. */
+/** 矢量造型之间共享的字体数据，按 tools/assets.ts 分配的 id 索引。 */
 const fontCache = new Map<string, Promise<string>>();
 
 /**
- * Loads a vector costume after putting its fonts back. An image cannot fetch fonts itself, so each costume
- * carries its fonts inline as the original loader wrote them. The asset folder keeps one copy of each.
+ * 恢复字体后加载矢量造型。图像无法自行获取字体，因此每个造型内嵌原加载器写入的字体。
+ * 资源文件夹为每种字体只保留一份副本。
  */
 async function loadSvg(url: string): Promise<HTMLImageElement> {
   let text = await fetch(url).then((r) => {

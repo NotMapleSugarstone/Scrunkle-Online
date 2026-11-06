@@ -1,6 +1,6 @@
-// Prints every piece of one target's digest that differs between the reference and the port at one frame.
-// Usage: npx tsx tools/parity-pieces.ts <scenario-file|idle> <frame> <target index>
-// Needs tools/ref-server.ts running.
+// 打印某一帧中一个目标摘要里参考实现与移植版不同的每个部分。
+// 用法：npx tsx tools/parity-pieces.ts <scenario-file|idle> <frame> <target index>
+// 需要 tools/ref-server.ts 正在运行。
 import fs from 'node:fs';
 import path from 'node:path';
 import { serverPost } from './lib/ref-client.ts';

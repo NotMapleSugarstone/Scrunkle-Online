@@ -1,6 +1,6 @@
-// One room: seats players, starts the game for everyone at once, forwards connection setup
-// messages, and relays inputs only for players whose direct connection failed. Sockets use the
-// hibernation API, so an idle room costs nothing.
+// 一个房间：安排座位、为所有人同时开始游戏、转发连接建立
+// 消息，并只为直连失败的玩家转发输入。套接字使用
+// 休眠 API，因此空闲房间不产生费用。
 import { DurableObject } from 'cloudflare:workers';
 import { readClient, type FromRoom } from '../../src/net/protocol';
 import { newRoom, RoomRules, type Out, type RoomData } from '../../src/net/room-rules';
@@ -14,7 +14,7 @@ interface Tag {
   count: number;
 }
 
-/** Messages one socket may send in a window. Relaying inputs sends about 30 a second to each of up to 3 other players. */
+/** 一个套接字在一个窗口内可发送的消息数。转发输入时每秒约向最多 3 位其他玩家各发送 30 条。 */
 const FLOOD_MAX = 1800;
 const FLOOD_WINDOW_MS = 10_000;
 const SOCKETS_MAX = 8;
@@ -90,7 +90,7 @@ export class Room extends DurableObject<Env> {
         return;
       }
       if (named.unchecked) log('room-name-unchecked', { room: this.id(), error: named.unchecked });
-      // Other messages run while the check waits, so a second hello from this socket may have taken a seat.
+      // 检查等待期间其他消息仍会运行，因此此套接字发来的第二条 hello 可能已经占用了座位。
       if (this.tagOf(ws).seat !== null) return;
       read.m.name = named.name;
     }
@@ -99,7 +99,7 @@ export class Room extends DurableObject<Env> {
     const before = JSON.stringify(d);
     const r = rules.handle(tag.seat, read.m, now, () => crypto.randomUUID(), () => crypto.getRandomValues(new Uint32Array(1))[0]);
     if (r.seat !== undefined) {
-      // A rejoin replaces any older socket on the same seat.
+      // 重新加入会替换同一座位上的旧套接字。
       for (const other of this.ctx.getWebSockets()) if (other !== ws && this.tagOf(other).seat === r.seat) shut(other, 4000, 'replaced');
       tag.seat = r.seat;
       log('room-seat', { room: this.id(), seat: r.seat, resume: read.m.type === 'hello' && 'resume' in read.m, started: d.start !== null });
@@ -115,13 +115,13 @@ export class Room extends DurableObject<Env> {
       }
       shut(ws, 1000, 'closed');
     }
-    // Relayed inputs and signaling do not change the room record, so most messages write nothing.
+    // 转发的输入和信令不改变房间记录，因此多数消息不写入任何内容。
     if (JSON.stringify(d) !== before) await this.save();
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     log('room-socket-closed', { room: this.id(), seat: this.tagOf(ws).seat, code, reason, wasClean });
-    // Browsers close with 1001 when the page closes or navigates away. A broken connection closes with 1006.
+    // 页面关闭或跳转时浏览器以 1001 关闭。连接断开时以 1006 关闭。
     await this.closed(ws, code === 1001);
   }
 
@@ -130,7 +130,7 @@ export class Room extends DurableObject<Env> {
     await this.closed(ws);
   }
 
-  /** A short form of this room's object id, enough to group one room's log lines. */
+  /** 此房间对象 id 的短形式，足以将同一房间的日志行归为一组。 */
   private id(): string {
     return this.ctx.id.toString().slice(0, 12);
   }
@@ -162,7 +162,7 @@ function send(ws: WebSocket, m: FromRoom): void {
   try {
     ws.send(JSON.stringify(m));
   } catch {
-    // The socket closed between the check and the send.
+    // 检查与发送之间套接字已关闭。
   }
 }
 
@@ -170,6 +170,6 @@ function shut(ws: WebSocket, code: number, reason: string): void {
   try {
     ws.close(code, reason.slice(0, 120));
   } catch {
-    // Already closed.
+    // 已经关闭。
   }
 }

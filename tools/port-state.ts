@@ -1,5 +1,5 @@
-// Runs a scenario in the port and prints chosen stage variables, open questions and running scripts at chosen frames.
-// Usage: npx tsx tools/port-state.ts <scenario-file> <frame,frame,...> [variable,variable,...]
+// 在移植版中运行场景，并打印选定帧的舞台变量、打开的问题和运行中的脚本。
+// 用法：npx tsx tools/port-state.ts <scenario-file> <frame,frame,...> [variable,variable,...]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createPort, InputTimeline, type Scenario } from './lib/port.ts';

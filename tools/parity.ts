@@ -1,5 +1,5 @@
-// Runs a scenario on the reference and on the port and reports the first frame where they differ.
-// Usage: npx tsx tools/parity.ts <scenario-file|idle> [frames]
+// 在参考实现和移植版上运行场景，并报告第一个不同的帧。
+// 用法：npx tsx tools/parity.ts <scenario-file|idle> [frames]
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -22,7 +22,7 @@ function refEvents(sc: Scenario): Record<number, unknown[]> {
   return byFrame;
 }
 
-/** A reference server (tools/ref-server.ts) runs scenarios without reloading the project. */
+/** 参考服务器（tools/ref-server.ts）无需重新加载项目即可运行场景。 */
 const serverUp = await isServerUp();
 
 async function runRef(ref: RefSession | null, sc: Scenario, fullAt: number[] = []): Promise<{ digests: Digest[]; fulls: Record<number, FullState> }> {
@@ -117,7 +117,7 @@ function explain(r: FullState, p: FullState): void {
       shown++;
     }
   }
-  // canon() keeps NaN, Infinity and -0 apart, which JSON does not.
+  // canon() 会区分 NaN、Infinity 和 -0，而 JSON 不会。
   for (let i = 0; i < Math.max(r.pen.length, p.pen.length); i++) {
     if (canon(r.pen[i]) !== canon(p.pen[i])) {
       console.log(`  pen op ${i}: ref ${canon(r.pen[i])}\n             port ${canon(p.pen[i])}`);
@@ -129,7 +129,7 @@ function explain(r: FullState, p: FullState): void {
   if (rs !== ps) console.log(`  sound: ref ${rs}\n         port ${ps}`);
 }
 
-// Reference digests are cached per scenario, harness and project build.
+// 参考摘要按场景、测试框架和项目构建缓存。
 const cacheDir = path.join(ROOT, 'out', 'ref-cache');
 fs.mkdirSync(cacheDir, { recursive: true });
 const sb3 = fs.statSync(SOURCE_SB3);
@@ -154,7 +154,7 @@ if (!diff) {
 } else {
   console.log(`FIRST DIFFERENCE at frame ${diff.frame}: ${diff.what.slice(0, 10).join(', ')}`);
   const at = [diff.frame - 1, diff.frame].filter((f) => f >= 1);
-  // Green flag does not reset variables, so the detailed rerun needs a freshly loaded project.
+  // 绿旗不会重置变量，因此详细重跑需要重新加载项目。
   if (!serverUp) {
     if (ref) await ref.close();
     ref = await openReference();

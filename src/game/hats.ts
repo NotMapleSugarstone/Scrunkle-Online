@@ -1,6 +1,6 @@
-// "Actually wear hats": each fighter's hat is drawn on the fighter's head, turning with it, and right after the
-// fighter's own stamps on the pen layer, so the hat gets the fighter's outline and the other fighter can cover it.
-// It changes only the picture. `tools/hat-anchors.ts` makes the head positions in `hat-anchors.json`.
+// “实际戴上帽子”：每个斗士的帽子画在其头上并随头转动，而且紧跟在
+// 斗士自己的画笔图层图章之后，因此帽子会获得斗士的轮廓，其他斗士也能遮住它。
+// 它只改变画面。`tools/hat-anchors.ts` 生成 `hat-anchors.json` 中的头部位置。
 import type { PenCmd, Runtime } from '../engine/runtime.ts';
 import type { Target } from '../engine/target.ts';
 import { def as fighterDef } from './generated/costumes.ts';
@@ -8,17 +8,17 @@ import anchorData from './hat-anchors.json' with { type: 'json' };
 
 type Stamp = Extract<PenCmd, { op: 'stamp' }>;
 
-/** By skin: the hat point in costume units from the rotation center (y up), its turn clockwise, and 1 when mirrored. */
+/** 按皮肤索引：帽子点在造型单位中相对旋转中心的位置（y 向上）、顺时针旋转角度，以及镜像时为 1。 */
 const anchors = new Map<number, readonly number[]>();
 for (const c of fighterDef.costumes) {
   const a = (anchorData as Record<string, number[]>)[c.name];
   if (a) anchors.set(c.skin, a);
 }
 
-/** The variable `!#` numbers the fighter sprite's clones: 1 and 2 draw the fighters, 4 and 5 draw their hats. */
+/** 变量 `!#` 为斗士角色的克隆编号：1 和 2 绘制斗士，4 和 5 绘制其帽子。 */
 const NUM = fighterDef.varNames?.['!#'] ?? 'Num';
 
-/** The player a stamp belongs to and whether it is the hat, or null for every other stamp. */
+/** 图章所属的玩家以及它是否为帽子；其他所有图章为 null。 */
 function role(owner: Target | undefined): { player: number; hat: boolean } | null {
   if (!owner || owner.sprite.def.name !== fighterDef.name) return null;
   const n = Number(owner.v[NUM]);
@@ -29,16 +29,15 @@ function role(owner: Target | undefined): { player: number; hat: boolean } | nul
 
 const RING = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 
-/** One fighter's stamps from one frame: the outline, the fighter and any copies, then the hat and its copies. */
+/** 一个斗士一帧内的图章：轮廓、斗士及副本，然后是帽子及副本。 */
 interface Group {
   bodies: number[];
   hats: Stamp[];
 }
 
 /**
- * The hat drawn with a fighter stamp: on the head that the costume's anchor gives, turned and flipped with the fighter.
- * It takes the fighter stamp's effects, so it is white with the outline and fades and flashes with the fighter, and
- * keeps the hat stamp's own color.
+ * 与斗士图章一起绘制的帽子：位于造型锚点给出的头部位置，随斗士旋转和翻转。
+ * 它采用斗士图章的效果，因此会随斗士一起变白、淡出和闪烁，并保留帽子图章自身的颜色。
  */
 function worn(body: Stamp, hat: Stamp, anchor: readonly number[]): Stamp {
   const [ax, ay, turn, mirrored] = anchor;
@@ -59,7 +58,7 @@ function worn(body: Stamp, hat: Stamp, anchor: readonly number[]): Stamp {
   return stamp;
 }
 
-/** The pen commands from `from` on with each hat moved onto its fighter's head. */
+/** 从 `from` 开始的画笔命令，并将每顶帽子移动到其斗士的头部。 */
 export function wearHats(rt: Runtime, cmds: readonly PenCmd[], from: number): readonly PenCmd[] {
   const owners = rt.stampOwners;
   if (!owners) return cmds.slice(from);
@@ -89,9 +88,9 @@ export function wearHats(rt: Runtime, cmds: readonly PenCmd[], from: number): re
     out.push(cmd);
     const g = groupOf.get(i);
     if (!g || g.hats.length === 0) continue;
-    // The fighter's outline stamps come first and have no hat stamps of their own. After the last of them the hat gets
-    // its own white ring at the same width, so the outline goes round both. The game's ring leaves out one diagonal,
-    // which shows most at the top of the figure, so the hat's ring has all eight.
+    // 斗士的轮廓图章最先出现，且没有自己的帽子图章。最后一个轮廓图章之后，帽子会
+    // 以自己的白色圆环使用相同宽度，使轮廓包住两者。游戏的圆环缺少一条对角线，
+    // 这在人物顶部最明显，因此帽子的圆环包含全部八条。
     const outlines = g.bodies.length - g.hats.length;
     const j = g.bodies.indexOf(i);
     if (outlines > 0 && j === outlines - 1) {

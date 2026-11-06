@@ -16,7 +16,7 @@
 <script src="/node_modules/@scratch/scratch-render/dist/web/scratch-render.js"></script>
 <script src="/node_modules/@scratch/scratch-vm/dist/web/scratch-vm.js"></script>
 <script>
-// Plays a project in real time without sound. ?f=<path to .sb3>. window.vm is exposed for inspection.
+// 实时播放项目，不播放声音。?f=<.sb3 路径>。window.vm 暴露出来供检查。
 (async () => {
   const q = new URLSearchParams(location.search);
   const canvas = document.getElementById('stage');
@@ -34,7 +34,7 @@
   const key = k => ({ ' ': 'space', ArrowUp: 'up arrow', ArrowDown: 'down arrow', ArrowLeft: 'left arrow', ArrowRight: 'right arrow', Enter: 'enter' }[k] || k.toLowerCase());
   canvas.addEventListener('keydown', e => { vm.postIOData('keyboard', { key: e.key, isDown: true }); e.preventDefault(); });
   canvas.addEventListener('keyup', e => { vm.postIOData('keyboard', { key: e.key, isDown: false }); e.preventDefault(); });
-  // Scripts name keys the way Scratch does; the VM expects browser key names.
+  // 脚本使用 Scratch 的键名；VM 需要浏览器键名。
   const browserKey = k => ({ 'up arrow': 'ArrowUp', 'down arrow': 'ArrowDown', 'left arrow': 'ArrowLeft', 'right arrow': 'ArrowRight', space: ' ', enter: 'Enter' }[k] || k);
   window.press = (k, ms = 100) => new Promise(r => { vm.postIOData('keyboard', { key: browserKey(k), isDown: true }); setTimeout(() => { vm.postIOData('keyboard', { key: browserKey(k), isDown: false }); r(); }, ms); });
   window.hold = (k, down) => vm.postIOData('keyboard', { key: browserKey(k), isDown: down });

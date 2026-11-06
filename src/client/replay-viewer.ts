@@ -1,6 +1,6 @@
-// Plays a saved replay in place of the start screen: the match from its saved start state with its
-// recorded inputs, with buttons to pause, step, change the speed, seek and exit.
-// Seeking back loads the nearest state kept on the way (one every 2 seconds) and plays forward from it.
+// 代替开始界面播放已保存的回放：从保存的开始状态和记录输入重演比赛，
+// 并提供暂停、单步、变速、跳转和退出按钮。
+// 向后跳转时加载路径上最近的状态（每 2 秒一个），再向前播放。
 import { loadSnapshot, saveSnapshot, type Snapshot } from '../engine/snapshot.ts';
 import { snapshotHash } from '../net/rollback.ts';
 import { startFixedLoop, type Game } from './game.ts';
@@ -8,21 +8,21 @@ import { clock, replayFrames, replayName, type ReplayBody, type ReplayMeta } fro
 import { currentFormat, currentText } from './net-text.ts';
 
 export interface ReplayViewerOptions {
-  /** The game, with a fresh runtime made with the replay's `t0`. */
+  /** 游戏；运行时已用回放的 `t0` 重新创建。 */
   game: Game;
   meta: ReplayMeta;
   body: ReplayBody;
-  /** Why it may not play the same, if it may not. The replay then starts paused. */
+  /** 若播放结果可能不同，说明原因；此时回放以暂停状态开始。 */
   warning: string;
   page: HTMLElement;
   stage: HTMLElement;
-  /** The player chose Exit, or a video finished recording. */
+  /** 玩家选择退出，或视频录制完成。 */
   onExit: () => void;
-  /** Records the whole replay as a video at normal speed instead of letting the player watch. */
+  /** 以正常速度将整个回放录制为视频，而不是让玩家观看。 */
   video?: VideoOptions;
 }
 
-/** Video sizes keep the game's 16:9 shape. */
+/** 视频尺寸保持游戏的 16:9 比例。 */
 export const VIDEO_QUALITIES = {
   '480p': { width: 854, height: 480, bitrate: 2_500_000 },
   '720p': { width: 1280, height: 720, bitrate: 5_000_000 },
@@ -32,16 +32,16 @@ export type VideoQuality = keyof typeof VIDEO_QUALITIES;
 
 export interface VideoOptions {
   quality: VideoQuality;
-  /** Sets the canvas to a fixed size while recording, or back to the window's when null. */
+  /** 录制时将画布设为固定尺寸；传入 null 时恢复窗口尺寸。 */
   setCanvasSize: (size: [number, number] | null) => void;
-  /** Called with the finished video and its file extension. */
+  /** 完成视频及其文件扩展名时调用。 */
   done: (video: Blob, extension: string) => void;
 }
 
-/** MP4 where the browser can record it, otherwise WebM. */
+/** 浏览器能录制 MP4 时用 MP4，否则用 WebM。 */
 const VIDEO_TYPES = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
 
-/** The video type this browser records, or null when it records none. */
+/** 此浏览器可录制的视频类型，无法录制时为 null。 */
 export function videoType(): string | null {
   if (typeof MediaRecorder === 'undefined' || typeof HTMLCanvasElement.prototype.captureStream !== 'function') return null;
   return VIDEO_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) ?? null;
@@ -57,7 +57,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
-/** A button that never takes keyboard focus, so Space and the arrow keys keep working. */
+/** 不获取键盘焦点的按钮，使空格和方向键继续有效。 */
 function button(text: string, title: string, onClick: () => void): HTMLButtonElement {
   const b = el('button', undefined, text);
   b.title = title;
@@ -67,7 +67,7 @@ function button(text: string, title: string, onClick: () => void): HTMLButtonEle
   return b;
 }
 
-/** Starts the replay. Returns a function that stops it and takes its controls off the page. */
+/** 启动回放。返回停止回放并移除控件的函数。 */
 export function runReplayViewer(o: ReplayViewerOptions): () => void {
   const { game, body } = o;
   const pageTitle = document.title;
@@ -94,7 +94,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   const stop = () => {
     stopLoop();
     window.removeEventListener('keydown', onKey);
-    // A recording stopped before the end is thrown away.
+    // 提前停止的录制会被丢弃。
     if (recorder && recorder.state !== 'inactive') recorder.stop();
     if (o.video) {
       game.audio.endCapture();
@@ -125,7 +125,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   let carry = 0;
   let mismatch = false;
 
-  /** Plays the next recorded frame. */
+  /** 播放下一条记录帧。 */
   function advance(): void {
     game.step(frames[at]);
     at++;
@@ -137,7 +137,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
     }
   }
 
-  /** Jumps to frame `n` without sound, from the nearest kept state at or before it. */
+  /** 无声跳转到第 `n` 帧，从不超过它的最近保留状态开始。 */
   function seek(n: number): void {
     n = Math.max(0, Math.min(total, n));
     if (n < at || n - at > KEEP_EVERY) {
@@ -181,7 +181,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   document.title = currentFormat('replayPrefix', { name: replayName(o.meta) });
   bar.append(time, seekBar, pause, back, step, rate, exit);
 
-  /** Space, Left and Right control the replay. Returns whether the key was one of them. */
+  /** 空格、左、右控制回放。返回该键是否被使用。 */
   function controls(key: string): boolean {
     if (o.video) return false;
     if (key === ' ') setPaused(!paused);
@@ -204,7 +204,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
     if (seekBar.value !== String(at)) seekBar.value = String(at);
     bar.classList.toggle('paused', paused);
   }
-  /** Draws the current frame without playing its sounds again. */
+  /** 绘制当前帧，不重复播放声音。 */
   function draw(): void {
     rt().soundEvents.length = 0;
     game.renderer.render(rt());
@@ -236,7 +236,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   );
   let finishVideo = () => {};
   if (o.video) {
-    // The whole replay plays once at normal speed while the canvas and the game's sound are recorded.
+    // 录制画布和游戏声音时，整个回放以正常速度播放一次。
     const video = o.video;
     const quality = VIDEO_QUALITIES[video.quality];
     const type = videoType()!;

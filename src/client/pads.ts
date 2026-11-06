@@ -1,7 +1,7 @@
-// Touch controls and game controllers, read as the game's buttons for each local player.
-// Slot 0 is the first player on this device: the touch controls and the first controller used. Each
-// further controller is the next player when playing on one computer, in the order they are first used,
-// so a device that only claims to be a controller (as phone sensors do on Android) never takes a slot.
+// 触屏控制和游戏控制器，按本地每位玩家的游戏按钮读取。
+// 槽位 0 是此设备上的第一位玩家：触屏控制和第一个使用的控制器。
+// 后续控制器在单机游玩时按首次使用顺序成为下一位玩家，
+// 因此只在 Android 上伪装成控制器的设备（如手机传感器）不会占用槽位。
 import { ACTIONS, PAD_BUTTONS } from './controls.ts';
 
 const act = (name: string): number => ACTIONS.indexOf(name);
@@ -10,10 +10,10 @@ export const DOWN = act('Down');
 export const LEFT = act('Left');
 export const RIGHT = act('Right');
 
-/** How far a stick must lean before it counts as a direction. */
+/** 摇杆倾斜到多大才算方向。 */
 const STICK_DEADZONE = 0.4;
 
-/** The game's buttons for the standard layout's buttons, with the D-pad moving like the left stick. */
+/** 标准布局按钮对应的游戏按钮，方向键像左摇杆一样移动。 */
 const BUTTONS: [number, number][] = [
   ...PAD_BUTTONS.map(([b, name]): [number, number] => [b, act(name)]).filter(([, a]) => a >= 0),
   [12, UP],
@@ -22,31 +22,31 @@ const BUTTONS: [number, number][] = [
   [15, RIGHT],
 ];
 
-/** Devices that Android lists as controllers but are not, such as fingerprint sensors and side keys. */
+/** Android 将其列为控制器但实际不是的设备，例如指纹传感器和侧键。 */
 const NOT_CONTROLLERS = /uinput|fpc|goodix|fingerprint|gpio-keys/i;
 
-/** Whether a device looks like a controller: the standard layout, or enough buttons and a stick or pad. */
+/** 设备是否像控制器：标准布局，或按钮数量足够且有摇杆/方向键。 */
 function isController(gp: Gamepad): boolean {
   if (NOT_CONTROLLERS.test(gp.id)) return false;
   return gp.mapping === 'standard' || (gp.buttons.length >= 4 && gp.axes.length >= 2);
 }
 
-/** A controller's name without the vendor and product numbers some browsers add. */
+/** 去掉某些浏览器附加的厂商和产品编号后的控制器名称。 */
 const controllerName = (gp: Gamepad) => gp.id.replace(/\s*\((?:STANDARD GAMEPAD\s*)?Vendor: \w+ Product: \w+\)/i, '').trim() || 'Controller';
 
-/** The devices the browser lists as controllers, and whether the game uses each one. */
+/** 浏览器列为控制器的设备，以及游戏是否使用每个设备。 */
 export function listControllers(): { name: string; used: boolean }[] {
   return [...(navigator.getGamepads?.() ?? [])].filter((gp): gp is Gamepad => !!gp && gp.connected).map((gp) => ({ name: controllerName(gp), used: isController(gp) }));
 }
 
 export class Pads {
-  /** Buttons held on the touch controls. */
+  /** 触屏控制中按住的按钮。 */
   private held = new Set<number>();
-  /** Buttons pressed since the last sample, so a tap shorter than a frame still counts. */
+  /** 自上次采样以来按下的按钮，使短于一帧的轻点也能计数。 */
   private tapped = new Set<number>();
-  /** Controller indices in the order they were first used, which is their slot order. */
+  /** 按首次使用顺序排列的控制器索引，也就是槽位顺序。 */
   private order: number[] = [];
-  /** Called when a controller is used for the first time. */
+  /** 控制器首次使用时调用。 */
   onController: () => void = () => {};
 
   press(action: number): void {
@@ -62,7 +62,7 @@ export class Pads {
     this.held.clear();
   }
 
-  /** Each local player's buttons for one frame, by slot. */
+  /** 每帧各本地玩家按槽位排列的按钮。 */
   sample(): number[][] {
     const slots: Set<number>[] = [new Set([...this.held, ...this.tapped])];
     this.tapped.clear();
@@ -85,7 +85,7 @@ export class Pads {
     return slots.map((s) => [...s]);
   }
 
-  /** Puts back buttons whose frame did not run, so the next sample includes them. */
+  /** 放回所在帧未运行的按钮，使下次采样仍包含它们。 */
   retap(actions: number[]): void {
     for (const a of actions) this.tapped.add(a);
   }
@@ -98,7 +98,7 @@ function direction(x: number, y: number, out: Set<number>): void {
   if (y > STICK_DEADZONE) out.add(DOWN);
 }
 
-/** Hat switch directions clockwise from up, for axis values -1, -5/7, ..., 1. About 1.29 means not pressed. */
+/** 帽子开关方向，从上开始顺时针，对应轴值 -1、-5/7、...、1。约 1.29 表示未按下。 */
 const HAT: [number, number][] = [
   [0, -1],
   [1, -1],
@@ -114,8 +114,8 @@ function readController(gp: Gamepad, out: Set<number>): void {
   for (const [b, a] of BUTTONS) if (gp.buttons[b]?.pressed) out.add(a);
   direction(gp.axes[0] ?? 0, gp.axes[1] ?? 0, out);
   if (gp.mapping === 'standard') return;
-  // Without the standard layout, desktop browsers report a D-pad as one hat axis (axis 9) that steps
-  // through eight values from -1 to 1. A value between the steps, such as a resting 0, is not a direction.
+  // 没有标准布局时，桌面浏览器会把方向键报告为一个帽轴（轴 9），其值在
+  // 八个 -1 到 1 的档位间变化。位于档位之间的值（例如静止的 0）不是方向。
   const hat = gp.axes[9];
   if (hat === undefined) return;
   const step = ((hat + 1) * 7) / 2;
@@ -123,7 +123,7 @@ function readController(gp: Gamepad, out: Set<number>): void {
   if (k >= 0 && k <= 7 && Math.abs(step - k) < 0.15) direction(HAT[k][0], HAT[k][1], out);
 }
 
-/** The key names that press `actions` for a seat whose keys are `row` (from `seatKeys`). */
+/** 为按键为 `row`（来自 `seatKeys`）的座位按下 `actions` 的键名。 */
 export function actionKeys(actions: number[], row: string[]): string[] {
   const out: string[] = [];
   for (const a of actions) if (row[a]) out.push(row[a]);

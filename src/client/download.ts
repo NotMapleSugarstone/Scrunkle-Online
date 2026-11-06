@@ -1,6 +1,6 @@
-// Saving a file the page made, such as a replay or its video, to the player's downloads.
+// 将页面生成的文件（如回放或其视频）保存到玩家的下载目录。
 
-/** A name that every system accepts as a file name, from a replay's name. */
+/** 根据回放名称生成各系统都接受的文件名。 */
 export function fileName(name: string): string {
   const safe = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
   return safe || 'replay';

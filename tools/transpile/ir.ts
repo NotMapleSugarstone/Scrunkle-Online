@@ -1,5 +1,5 @@
-// Parses the source project JSON into a small statement/expression tree with every variable,
-// list and broadcast reference resolved the way the original loader resolves them.
+// 将源项目 JSON 解析为小型语句/表达式树，所有变量、列表和广播引用
+// 都按原加载器的方式解析。
 import { COMPILED } from '../../src/engine/defs.ts';
 
 export type Lit = string | number | boolean | undefined;
@@ -32,7 +32,7 @@ export interface VarDecl {
   prop: string;
   value: unknown;
   list: boolean;
-  /** A stage variable shared with other players through the cloud link. */
+  /** 通过云连接与其他玩家共享的舞台变量。 */
   cloud?: boolean;
 }
 
@@ -44,14 +44,14 @@ export interface ProcIR {
   argDefaults: unknown[];
   body: Stmt[];
   defId: string;
-  /** Sanitized function name base. */
+  /** 清理后的函数名基础部分。 */
   fname: string;
 }
 
 export interface ScriptIR {
   hat: 'flag' | 'broadcast' | 'clone' | 'key' | 'click' | 'timer';
   msg?: string;
-  /** The threshold literal of a timer hat. */
+  /** 计时器帽子的阈值字面量。 */
   value?: string;
   top: string;
   body: Stmt[];
@@ -66,7 +66,7 @@ export interface TargetIR {
   lists: VarDecl[];
   scripts: ScriptIR[];
   procs: Map<string, ProcIR>;
-  /** Prototype data by proccode: first prototype in block order, which is what calls use for params. */
+  /** 按 proccode 索引的原型数据：积木顺序中的第一个原型，调用用它确定参数。 */
   protos: Map<string, { names: string[]; ids: string[]; defaults: unknown[] }>;
 }
 
@@ -78,7 +78,7 @@ const RESERVED = new Set([
   'true', 'false', 'undefined', 'NaN', 'Infinity', 'arguments', 'eval',
 ]);
 
-/** Symbols that carry meaning in names get a word instead of disappearing. */
+/** 名称中有含义的符号会换成单词，而不是直接消失。 */
 const SYMBOL_WORDS: Record<string, string> = { '#': 'Num', '%': 'Pct', '&': 'And', '+': 'Plus', '=': 'Eq' };
 
 export function sanitize(name: string, used: Set<string>, fallback = 'unnamed'): string {
@@ -108,7 +108,7 @@ interface RawBlock {
   mutation?: any;
 }
 
-/** Inputs whose numeric-looking text stays text when it names a costume or sound, as the original's compiler keeps it. */
+/** 看似数字的文本在表示造型或声音名称时仍保持文本，原版编译器也这样保留。 */
 const KEEPS_NAMES = new Set([
   'sensing_keypressed.KEY_OPTION',
   'data_addtolist.ITEM',
@@ -118,7 +118,7 @@ const KEEPS_NAMES = new Set([
   'looks_switchbackdropto.BACKDROP',
   'looks_switchcostumeto.COSTUME',
 ]);
-/** Blocks the original's compiler runs through its compatibility layer, where every input keeps names as text. */
+/** 原版编译器通过兼容层运行的积木，其中每个输入都将名称保留为文本。 */
 const COMPAT_BLOCKS = new Set([
   'looks_changestretchby', 'looks_hideallsprites', 'looks_sayforsecs', 'looks_setstretchto', 'looks_switchbackdroptoandwait',
   'looks_thinkforsecs', 'motion_align_scene', 'motion_glidesecstoxy', 'motion_glideto', 'motion_goto', 'motion_pointtowards',
@@ -128,8 +128,8 @@ const COMPAT_BLOCKS = new Set([
 ]);
 
 /**
- * The original's compiler turns a constant into a number when the number prints back as the same text, so "-30" is
- * stored as -30 while "1.50", "1e3" and " 5" stay text. `keepNames` leaves costume and sound names as text.
+ * 原版编译器会在数字打印回相同文本时把常量转换为数字，因此 "-30" 存为 -30，
+ * 而 "1.50"、"1e3" 和 " 5" 保持文本。`keepNames` 让造型和声音名称保持文本。
  */
 function compiledConstant(v: string | number, keepNames: boolean, names: Set<string>): string | number {
   const s = String(v);
@@ -159,7 +159,7 @@ export function parseProject(project: any): TargetIR[] {
   }));
   const stage = targets.find((t) => t.isStage)!;
 
-  // Declarations, with property names unique per target (stage names are global).
+  // 声明，属性名在每个目标内唯一（舞台名称是全局的）。
   for (const t of targets) {
     const usedV = new Set<string>();
     const usedL = new Set<string>();
@@ -171,7 +171,7 @@ export function parseProject(project: any): TargetIR[] {
     }
   }
 
-  // Resolve every reference once, creating stage variables for dangling ones like the loader does.
+  // 一次性解析所有引用，像加载器一样为悬空引用创建舞台变量。
   const stageBroadcasts: Record<string, string> = { ...(stageJson.broadcasts ?? {}) };
   const resolver = (t: TargetIR) => {
     const find = (id: string, list: boolean): StoreRef | null => {
@@ -238,7 +238,7 @@ export function parseProject(project: any): TargetIR[] {
         case 'data_listcontents':
           return { k: 'listContents', ref: resolve(b.fields.LIST[1], b.fields.LIST[0], true) };
       }
-      // Menus and other shadow-only blocks report their single field.
+      // 菜单和其他只有 shadow 的积木报告其单个字段。
       const fieldKeys = Object.keys(b.fields);
       if (b.shadow && fieldKeys.length === 1 && Object.keys(b.inputs).length === 0 && !REPORTER_OPS.has(b.opcode)) {
         const fv = b.fields[fieldKeys[0]];
@@ -264,7 +264,7 @@ export function parseProject(project: any): TargetIR[] {
       const order: string[] = [];
       for (const [name, desc] of Object.entries(b.inputs)) {
         if (name === 'custom_block' || name.startsWith('SUBSTACK')) continue;
-        // [1, x] same block and shadow; [2, x] block without shadow; [3, block, shadow].
+        // [1, x] 同一积木和 shadow；[2, x] 无 shadow 的积木；[3, block, shadow]。
         let e = exprOf(desc[1]);
         if (COMPILED && e?.k === 'lit' && (typeof e.v === 'string' || typeof e.v === 'number')) {
           const keepNames = b.opcode === 'procedures_call' || COMPAT_BLOCKS.has(b.opcode) || KEEPS_NAMES.has(`${b.opcode}.${name}`);
@@ -281,7 +281,7 @@ export function parseProject(project: any): TargetIR[] {
     const substack = (b: RawBlock, name: string): Stmt[] => {
       const d = b.inputs[name];
       if (!d || d[1] === null || d[1] === undefined) return [];
-      // A primitive in a branch slot loads as a no-op shadow block, the same as an empty branch.
+      // 分支槽中的原始积木会作为空操作 shadow 积木加载，与空分支相同。
       if (Array.isArray(d[1])) return [];
       return seq(d[1] as string);
     };
@@ -319,7 +319,7 @@ export function parseProject(project: any): TargetIR[] {
       return out;
     };
 
-    // Prototypes in block order (first wins), then definitions and hat scripts in block order.
+    // 按积木顺序的原型（先出现者优先），然后按积木顺序的定义和帽子脚本。
     for (const [, raw] of Object.entries(blocks)) {
       if (Array.isArray(raw)) continue;
       const b = raw as RawBlock;
@@ -373,7 +373,7 @@ export function parseProject(project: any): TargetIR[] {
         case 'event_whengreaterthan': {
           const menu = String(b.fields.WHENGREATERTHANMENU[0]).toUpperCase();
           const input = b.inputs.VALUE;
-          // Only a typed-in threshold is supported. A reporter in the slot would have to run inside the hat test.
+          // 只支持直接输入的阈值。槽中的报告器必须在帽子测试内运行。
           if (menu !== 'TIMER' || !Array.isArray(input?.[1])) throw new Error(`${t.name}: unsupported 'when ${menu} >' hat ${id}`);
           t.scripts.push({ hat: 'timer', msg: menu, value: String(input[1][1]), top: id, body: seq(b.next) });
           break;
@@ -386,5 +386,5 @@ export function parseProject(project: any): TargetIR[] {
   return targets;
 }
 
-/** Opcodes that are real reporters even when stored as shadows. */
+/** 即使存储为 shadow 也是真实报告器的操作码。 */
 const REPORTER_OPS = new Set<string>([]);

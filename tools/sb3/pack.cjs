@@ -1,4 +1,4 @@
-// Zips an unpacked project folder into an .sb3 holding project.json and only the assets it references.
+// 将解包的项目文件夹压缩为 .sb3，其中只包含 project.json 及其引用的资源。
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');

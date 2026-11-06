@@ -1,5 +1,5 @@
-// Plays a saved replay file back from its start snapshot and checks every state hash it kept.
-// Usage: npx tsx tools/replay-check.ts <file.meow>
+// 从起始快照播放保存的回放文件，并检查它保存的每个状态哈希。
+// 用法：npx tsx tools/replay-check.ts <file.meow>
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';

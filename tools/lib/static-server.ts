@@ -17,7 +17,7 @@ const MIME: Record<string, string> = {
   '.wasm': 'application/wasm',
 };
 
-/** Serves files under `root` on a random local port. */
+/** 在随机本地端口上提供 `root` 下的文件。 */
 export function startStaticServer(root: string): Promise<{ url: string; close: () => void }> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');

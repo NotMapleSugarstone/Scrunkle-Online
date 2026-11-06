@@ -1,9 +1,9 @@
-// Binary packets that travel between players during a game: per-frame inputs (resent until
-// acknowledged, so loss needs no retransmit), state checksums, round-trip probes, and a goodbye from a
-// player who leaves.
+// 对局中玩家之间传输的二进制数据包：逐帧输入（重发直到
+// 确认，因此丢包无需重传）、状态校验和、往返探测，以及离开玩家的
+// 告别消息。
 import type { PlayerInput } from '../engine/io.ts';
 
-/** Every key name the game can test, in a fixed order shared by all players. */
+/** 游戏可测试的每个键名，按所有玩家共享的固定顺序排列。 */
 export const KEY_TABLE: string[] = (() => {
   const keys = ['space', 'left arrow', 'up arrow', 'right arrow', 'down arrow', 'enter'];
   for (let c = 65; c <= 90; c++) keys.push(String.fromCharCode(c));
@@ -13,7 +13,7 @@ export const KEY_TABLE: string[] = (() => {
   return keys;
 })();
 
-/** Stands for any held key the game cannot name, so "any key pressed" still works. */
+/** 表示游戏无法命名的任意按住键，使“按下任意键”仍能工作。 */
 export const OTHER_KEY = '\u0000other';
 const KEY_INDEX = new Map(KEY_TABLE.map((k, i) => [k, i]));
 const MASK_BYTES = 16;
@@ -29,13 +29,13 @@ export enum Kind {
 export interface InputPacket {
   kind: Kind.Inputs;
   from: number;
-  /** Highest frame of the receiver's inputs the sender holds without gaps. */
+  /** 发送方持有的接收方无缺口输入的最高帧。 */
   ack: number;
-  /** The sender's current simulation frame, for time sync. */
+  /** 发送方当前的模拟帧，用于时间同步。 */
   frame: number;
   first: number;
   inputs: PlayerInput[];
-  /** A checksum of the sender's state after `checkFrame`, or 0 for none. */
+  /** 发送方在 `checkFrame` 之后状态的校验和，没有时为 0。 */
   checkFrame: number;
   checkHash: number;
 }
@@ -118,7 +118,7 @@ export function encodePacket(p: Packet): ArrayBuffer {
   return b.buffer;
 }
 
-/** Decodes a packet, or returns null for anything malformed. */
+/** 解码数据包；任何格式错误都返回 null。 */
 export function decodePacket(buf: ArrayBuffer): Packet | null {
   try {
     const b = new Uint8Array(buf);
@@ -163,15 +163,15 @@ export function decodePacket(buf: ArrayBuffer): Packet | null {
 }
 
 /**
- * An input as the other players decode it: keys in table order with unknown keys as OTHER_KEY, the pointer in whole
- * stage units and the answer cut to its sent length. The sender simulates this copy too, so every player runs the same input.
+ * 其他玩家解码时看到的输入：按键按表顺序排列，未知键记为 OTHER_KEY，指针取整到舞台单位，
+ * 答案截断到发送长度。发送方也模拟这份副本，使每位玩家运行相同输入。
  */
 export function asSent(inp: PlayerInput): PlayerInput {
   const p = decodePacket(encodePacket({ kind: Kind.Inputs, from: 0, ack: 0, frame: 0, first: 0, inputs: [inp], checkFrame: 0, checkHash: 0 }));
   return p?.kind === Kind.Inputs ? p.inputs[0] : { keys: [] };
 }
 
-/** Packs bytes for the text-only room relay. */
+/** 为仅支持文本的房间中继打包字节。 */
 export function toBase64(buf: ArrayBuffer): string {
   const b = new Uint8Array(buf);
   let s = '';

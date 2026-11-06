@@ -1,6 +1,6 @@
-// Prints the JavaScript that the original's compiler made for scripts it has already run, for comparing with the
-// port's generated code. Run a scenario through tools/parity.ts first so the scripts have compiled.
-// Needs tools/ref-server.ts running. Usage: npx tsx tools/ref-compiled.ts <sprite> <hat block id or proccode text> [out file]
+// 打印原版编译器为已运行脚本生成的 JavaScript，以便与
+// 移植版生成的代码比较。先通过 tools/parity.ts 运行场景，使脚本完成编译。
+// 需要 tools/ref-server.ts 正在运行。用法：npx tsx tools/ref-compiled.ts <sprite> <hat block id or proccode text> [out file]
 import fs from 'node:fs';
 import { SERVER } from './lib/ref-client.ts';
 

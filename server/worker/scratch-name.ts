@@ -1,5 +1,5 @@
-// Online names are Scratch usernames. A room seats a name only when a Scratch account has it, and never
-// a Scratch Team member's name. Made-up names (`player` and digits) skip the check.
+// 在线名称是 Scratch 用户名。只有当 Scratch 账号确实拥有某名称时，房间才允许该名称，
+// 并且绝不允许 Scratch 团队成员的用户名。编造的名称（`player` 加数字）会跳过检查。
 import { isGeneratedName } from '../../src/net/protocol';
 
 const USERS = 'https://api.scratch.mit.edu/users/';
@@ -7,7 +7,7 @@ const TIMEOUT_MS = 4000;
 
 export type NameCheck = { ok: true; name: string; unchecked?: string } | { ok: false; reason: string; why: string };
 
-/** Checks a name the protocol reader accepted. The account's own capitalization replaces the name's. */
+/** 检查协议读取器已接受的名称。账号自身的大小写会替换输入名称的大小写。 */
 export async function checkName(name: string): Promise<NameCheck> {
   if (isGeneratedName(name)) return { ok: true, name };
   let res: Response;
@@ -17,7 +17,7 @@ export async function checkName(name: string): Promise<NameCheck> {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
-    // Online play goes on when the account service cannot be reached.
+    // 无法访问账号服务时，在线游玩仍会继续。
     return { ok: true, name, unchecked: String(e) };
   }
   if (res.status === 404) {

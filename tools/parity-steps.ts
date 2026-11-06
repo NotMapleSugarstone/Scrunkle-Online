@@ -1,6 +1,6 @@
-// Finds the first thread step within one frame after which the reference and the port hold different state, and
-// prints both sides' differences after that step. Use it when a frame's end state differs but its thread order agrees.
-// Needs tools/ref-server.ts running. Usage: npx tsx tools/parity-steps.ts <scenario> <frame>
+// 找出参考实现和移植版在某一帧内状态开始不同的第一个线程步骤，并
+// 打印该步骤后两侧的差异。当帧末状态不同但线程顺序一致时使用。
+// 需要 tools/ref-server.ts 正在运行。用法：npx tsx tools/parity-steps.ts <scenario> <frame>
 import fs from 'node:fs';
 import path from 'node:path';
 import { serverPost, SERVER } from './lib/ref-client.ts';
@@ -41,7 +41,7 @@ function portTrace(fullAtStep: number): { log: unknown[][]; full: FullState | nu
   return { log, full };
 }
 
-// The original marks a thread that yielded as running again before its step returns.
+// 原版会在 yield 的线程步骤返回前再次将其标记为运行中。
 const norm = (e: unknown[]) => (e[4] === 2 ? [...e.slice(0, 4), 0, ...e.slice(5)] : e);
 const ref = (await refTrace(-1)).log.map(norm);
 const port = portTrace(-1).log;

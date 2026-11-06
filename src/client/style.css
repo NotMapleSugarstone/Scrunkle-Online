@@ -1,7 +1,7 @@
 :root {
   --page-bg: #0c0e12;
   --page-fg: #e6e8ee;
-  /* Menu palette, sampled from the game's menu screens and button costumes. */
+  /* 菜单配色，取自游戏菜单界面和按钮造型。 */
   --ui-text: #d7dae2;
   --ui-heading: #b4b9c4;
   --ui-muted: #8e94a1;
@@ -15,7 +15,7 @@
   --monitor-border: #c4ccd9;
   --monitor-item: #fc662c;
   --monitor-item-fg: #ffffff;
-  /* Player colors from the game's controls screen. */
+  /* 玩家颜色，取自游戏的控制界面。 */
   --p1: #ef7f7f;
   --p2: #7fdfeb;
   --ui-menu-bg: none;
@@ -113,11 +113,11 @@ body {
   font: 14px/1.4 system-ui, sans-serif;
   overflow: hidden;
   overscroll-behavior: none;
-  /* No double-tap zoom on touch screens. */
+  /* 触屏上禁用双击缩放。 */
   touch-action: manipulation;
 }
 
-/* Nothing on the page is selectable or shows a text caret, except text fields, the room code and the list monitors. */
+/* 页面上任何内容都不可选择，也不显示文本光标，文本框、房间代码和列表监视器除外。 */
 #app {
   height: 100%;
   display: flex;
@@ -189,7 +189,7 @@ body {
   cursor: pointer;
 }
 
-/* ------------------------------------------------------------------ question box and list monitors */
+/* ------------------------------------------------------------------ 问题框和列表监视器 */
 
 .question {
   position: absolute;
@@ -340,9 +340,9 @@ body {
   user-select: all;
 }
 
-/* ------------------------------------------------------------------ lobby */
+/* ------------------------------------------------------------------ 大厅 */
 
-/* Buttons and player cards use the menu buttons' shape: top-left and bottom-right corners cut. */
+/* 按钮和玩家卡片使用菜单按钮的形状：左上角和右下角切角。 */
 .lobby button:not(.lobby-return, .lobby-corner, .lobby-option),
 .seat,
 .hud button,
@@ -354,7 +354,7 @@ body {
   clip-path: var(--chamfer);
 }
 
-/* The fill sits 2px inside the stroke color. Its cut is 2px * (2 - sqrt 2) smaller so the diagonal stroke is 2px wide too. */
+/* 填充位于描边颜色内侧 2px。其切角小 2px * (2 - sqrt 2)，使斜向描边也保持 2px 宽。 */
 .lobby button:not(.lobby-return, .lobby-corner, .lobby-option)::before,
 .seat::before,
 .hud button::before,
@@ -381,7 +381,7 @@ body {
   line-height: 1.35;
 }
 
-/* On a phone the stage is small, so the lobby takes the whole screen. */
+/* 手机上舞台很小，因此大厅占满整个屏幕。 */
 @media (orientation: portrait) and (max-width: 700px), (orientation: landscape) and (max-height: 500px) {
   .lobby {
     position: fixed;
@@ -402,7 +402,7 @@ body {
   }
 }
 
-/* A phone on its side is short, so the text follows the height and the logo is smaller. */
+/* 横屏手机高度不足，因此文字跟随高度变化，标志也会缩小。 */
 @media (orientation: landscape) and (max-height: 500px) {
   .lobby {
     font-size: clamp(11px, 3.3vh, 16px);
@@ -424,7 +424,7 @@ body {
   pointer-events: none;
 }
 
-/* Centered in the space above the footer, scrolling when a short screen cannot fit it. */
+/* 在页脚上方的空间中居中，矮屏幕放不下时可滚动。 */
 .lobby-panel {
   width: min(24em, 92%);
   flex: 0 1 auto;
@@ -450,7 +450,7 @@ body {
   display: none;
 }
 
-/* Both logo costumes are 480x360 frames. This crops x 168-319, y 125-242 at 0.085em per pixel. */
+/* 两个标志造型都是 480x360 帧。这里按每像素 0.085em 裁切 x 168-319、y 125-242。 */
 .lobby-logo {
   display: block;
   width: 12.9em;
@@ -592,7 +592,7 @@ body {
   gap: 0.5em;
 }
 
-/* Room header, laid out like the bar at the top of the character select. */
+/* 房间标题栏，布局类似角色选择顶部的横条。 */
 .lobby-bar {
   display: flex;
   align-items: center;
@@ -679,7 +679,7 @@ body {
   color: var(--ui-muted);
 }
 
-/* Small label in the style of the "PLY 1" tag under each character card. */
+/* 小标签，风格类似每张角色卡下方的“PLY 1”标签。 */
 .seat-tag {
   padding: 0 0.45em;
   font-size: 0.75em;
@@ -717,7 +717,7 @@ body {
   color: var(--ui-heading);
 }
 
-/* The diamond return button from the character select, in the same corner. */
+/* 角色选择中的菱形返回按钮，位于同一个角落。 */
 .lobby-footer {
   align-self: stretch;
   flex: none;
@@ -756,7 +756,7 @@ body {
   outline: none;
 }
 
-/* The main menu's Mods button, in the top-left corner. */
+/* 主菜单的 Mods 按钮，位于左上角。 */
 .lobby-top-left {
   position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + 0.5em);
@@ -764,7 +764,7 @@ body {
   z-index: 1;
 }
 
-/* An on/off option in the footer, with its state in a small tag. */
+/* 页脚中的开关选项，状态显示在小标签中。 */
 .lobby-option {
   height: 2.2em;
   padding: 0;
@@ -787,7 +787,7 @@ body {
   outline: none;
 }
 
-/* One line, so a long label never pushes its state away from it. */
+/* 单行显示，长标签不会把状态挤开。 */
 .lobby-option-label {
   white-space: nowrap;
 }
@@ -806,7 +806,7 @@ body {
   border-color: var(--p1);
 }
 
-/* The main menu's controls button, in the same corner. */
+/* 主菜单的控制按钮，位于同一个角落。 */
 .lobby-corner {
   flex: none;
   height: 2.6em;
@@ -833,7 +833,7 @@ body {
   gap: 0.3em 1.2em;
 }
 
-/* The key column has a fixed width in the row's em, so a smaller font for long key names keeps the button size. */
+/* 按键列以行内 em 固定宽度，因此长键名使用较小字号时仍保持按钮尺寸。 */
 .control {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 6.4em;
@@ -848,7 +848,7 @@ body {
   color: var(--ui-muted);
 }
 
-/* Specific enough to win over the general lobby button rule. */
+/* 优先级足够高，可覆盖通用大厅按钮规则。 */
 .lobby .controls-grid button.control-key {
   width: 100%;
   min-height: 2.2em;
@@ -906,7 +906,7 @@ body {
   gap: 0.6em;
 }
 
-/* The controls menu's copy of the touch buttons in their on-screen places. */
+/* 控制菜单中触屏按钮在屏幕位置的副本。 */
 .touch-edit {
   display: flex;
   flex-direction: column;
@@ -986,7 +986,7 @@ body {
   color: #ffffff;
 }
 
-/* ------------------------------------------------------------------ online HUD */
+/* ------------------------------------------------------------------ 在线 HUD */
 
 .hud {
   width: var(--stage-w, 480px);
@@ -1018,7 +1018,7 @@ body {
   margin-left: auto;
 }
 
-/* ------------------------------------------------------------------ mod maker test scene */
+/* ------------------------------------------------------------------ Mod 制作器测试场景 */
 
 .test-bar .test-frame {
   min-width: 6em;
@@ -1103,9 +1103,9 @@ body {
   color: var(--ui-relay);
 }
 
-/* ------------------------------------------------------------------ touch controls */
+/* ------------------------------------------------------------------ 触屏控制 */
 
-/* In portrait the stage sits at the top, above the controls. */
+/* 竖屏时舞台位于顶部，在控制区上方。 */
 .touch-portrait #app {
   justify-content: flex-start;
   padding-top: max(8px, env(safe-area-inset-top));
@@ -1229,7 +1229,7 @@ body {
   border-radius: 999px;
 }
 
-/* Portrait: everything lives in the band below the stage. */
+/* 竖屏：所有内容都在舞台下方的带状区域。 */
 .touch-portrait .touch {
   --stick: min(40vw, 30vh, 180px);
   --face: min(48vw, 34vh, 220px);
@@ -1258,7 +1258,7 @@ body {
   transform: translateX(-50%);
 }
 
-/* The mods screen: one row per mod with its on/off option. */
+/* Mod 界面：每个 Mod 一行，带开关选项。 */
 .mod-list,
 .mod-problems {
   list-style: none;
@@ -1309,7 +1309,7 @@ body {
   flex: 1 1 8em;
 }
 
-/* A mod's script, shown before the player turns it on. */
+/* Mod 的脚本，在玩家开启前显示。 */
 .mod-script {
   display: flex;
   flex-direction: column;
@@ -1341,7 +1341,7 @@ body {
   margin-bottom: 0.4em;
 }
 
-/* The panel over the stage while an online game waits for a player. */
+/* 在线游戏等待玩家时覆盖舞台的面板。 */
 .hud-wait {
   position: absolute;
   left: 50%;
@@ -1383,9 +1383,9 @@ body {
   outline: none;
 }
 
-/* ------------------------------------------------------------------ replays */
+/* ------------------------------------------------------------------ 回放 */
 
-/* The save-a-replay buttons use the menu buttons' shape and colors. */
+/* 保存回放按钮使用菜单按钮的形状和颜色。 */
 .replay-offer button {
   --cut: 0.45em;
   --chamfer: polygon(0 var(--cut), var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%);
@@ -1420,7 +1420,7 @@ body {
   outline: none;
 }
 
-/* Messages such as "Replay saved", at the top of the stage. */
+/* 诸如“回放已保存”的消息，显示在舞台顶部。 */
 .toast {
   position: absolute;
   top: 8px;
@@ -1437,7 +1437,7 @@ body {
   pointer-events: none;
 }
 
-/* The question after a match, in the stage's bottom-right corner while the game goes on. */
+/* 比赛结束后的询问，在游戏继续时位于舞台右下角。 */
 .replay-offer {
   position: absolute;
   right: 8px;
@@ -1472,7 +1472,7 @@ body {
   accent-color: var(--p1);
 }
 
-/* Why a replay cannot play, or that it ended, over the top of the stage. */
+/* 回放无法播放或已结束的提示，覆盖在舞台顶部。 */
 .replay-note {
   position: absolute;
   top: 8px;
@@ -1488,7 +1488,7 @@ body {
 }
 
 
-/* A long list of replays shrinks to the space the screen has and scrolls, so the heading and Done stay in view. */
+/* 长回放列表会收缩到屏幕可用空间并滚动，使标题和“完成”始终可见。 */
 .lobby-replays {
   min-height: 0;
 }
@@ -1506,7 +1506,7 @@ body {
   gap: 0.2em;
 }
 
-/* A replay's download choices: MP4 or SFRP, then the video quality. */
+/* 回放的下载选项：MP4 或 SFRP，然后是视频质量。 */
 .export-kind {
   display: flex;
   gap: 0.2em;
@@ -1527,7 +1527,7 @@ body {
   font-size: 0.85em;
 }
 
-/* A row asking whether to delete it: the name, the question under it, then Delete and Keep. */
+/* 询问是否删除的行：名称、下方的问题，然后是删除和保留。 */
 .mod.asking {
   border-color: #ff8a8a;
 }
@@ -1555,7 +1555,7 @@ body {
   padding: 0 0.4em;
 }
 
-/* An icon button: the icon alone, in the muted text color until hovered. */
+/* 图标按钮：仅显示图标，悬停前使用弱化文字颜色。 */
 .lobby .lobby-icon {
   width: 2.2em;
   justify-content: center;

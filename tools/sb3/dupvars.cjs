@@ -1,5 +1,5 @@
-// For each sprite with two variables of the same name, counts the blocks bound to each copy, per script.
-// Usage: node tools/sb3/dupvars.cjs <project folder> [sprite]
+// 对每个有两个同名变量的角色，按脚本统计绑定到各副本的积木数。
+// 用法：node tools/sb3/dupvars.cjs <project folder> [sprite]
 const path = require('path');
 const L = require('./sb3.cjs');
 
@@ -12,7 +12,7 @@ for (const t of p.targets) {
   for (const [id, v] of Object.entries(t.variables)) { if (!byName.has(v[0])) byName.set(v[0], []); byName.get(v[0]).push(id); }
   const dups = [...byName].filter(([, ids]) => ids.length > 1);
   if (!dups.length) continue;
-  // Which top-level script each block belongs to.
+  // 每个积木属于哪个顶层脚本。
   const owner = new Map();
   for (const top of Object.keys(t.blocks).filter(id => L.isBlock(t.blocks[id]) && t.blocks[id].topLevel)) {
     const label = (L.hatText(t, top) || t.blocks[top].opcode).slice(0, 60);

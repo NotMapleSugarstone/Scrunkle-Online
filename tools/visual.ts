@@ -1,6 +1,6 @@
-// Renders the same scenario frames in the reference and in the port and writes a side-by-side
-// report with per-frame pixel differences.
-// Usage: npx tsx tools/visual.ts <scenario-file> <frame,frame,...> [width] [height]
+// 在参考实现和移植版中渲染相同的场景帧，并写出带逐帧像素差异的
+// 并排报告。
+// 用法：npx tsx tools/visual.ts <scenario-file> <frame,frame,...> [width] [height]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createServer } from 'vite';
@@ -17,7 +17,7 @@ const outDir = path.join(ROOT, 'out', 'visual', `${sc.name}-${width}x${height}`)
 fs.mkdirSync(outDir, { recursive: true });
 const frames = shotAt[shotAt.length - 1];
 
-// Port side.
+// 移植版一侧。
 const vite = await createServer({ root: ROOT, logLevel: 'error', server: { port: 0 } });
 await vite.listen();
 const portUrl = vite.resolvedUrls!.local[0];
@@ -29,7 +29,7 @@ await page.waitForFunction(() => document.body.dataset.ready === '1', null, { ti
 await page.evaluate(([s, t0, w, h]) => (window as any).PORT.init(s, t0, w, h), [sc, T0, width, height] as const);
 const portShots: Record<number, string> = await page.evaluate(([n, at]) => (window as any).PORT.run(n, at), [frames, shotAt] as const);
 
-// Reference side.
+// 参考实现一侧。
 const ref = await openReference();
 await ref.page.evaluate(([w, h]) => (window as any).H.resize(w, h), [width, height] as const);
 await ref.page.evaluate((s) => (window as any).H.start({ seed: s.seed, username: s.username ?? '' }), { seed: sc.seed, username: sc.username });
@@ -38,7 +38,7 @@ for (const e of sc.events) (byFrame[e.f] ??= []).push(e);
 const refRes = await ref.page.evaluate(([n, e, s]) => (window as any).H.run(n, e, { shotAt: s }), [frames, byFrame, shotAt] as const);
 const refShots: Record<number, string> = refRes.shots;
 
-// Pixel differences, computed in the page with canvases.
+// 像素差异，在页面中用画布计算。
 const rows: string[] = [];
 const summary: string[] = [];
 for (const f of shotAt) {

@@ -1,6 +1,6 @@
-// Counts the blocks of a Scratch project and lists the scripts that can never run: stacks without a hat, receivers of
-// messages that nothing sends, and procedures that no live script calls.
-// Usage: npx tsx tools/dead-code.ts [project.sb3]
+// 统计 Scratch 项目中的积木块，并列出永远无法运行的脚本：没有帽子的堆栈、接收
+// 无人发送的消息的接收器，以及没有活动脚本调用的过程。
+// 用法：npx tsx tools/dead-code.ts [project.sb3]
 import path from 'node:path';
 import { GAME_SB3, loadGame, ROOT } from './lib/sb3-patch.ts';
 import { countBlocks, Editor } from './lib/sb3-edit.ts';

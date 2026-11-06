@@ -1,9 +1,9 @@
-// Block-graph helpers for merging scripts between two Scratch 3 projects whose block ids are unrelated.
+// 用于在两个积木 id 互不相关的 Scratch 3 项目之间合并脚本的积木图辅助工具。
 const fs = require('fs');
 const path = require('path');
 const { makePrinter } = require('./decompile.cjs');
 
-// Each target gets a hidden link to the Stage, so printing can resolve global names from ids.
+// 每个目标都会获得指向舞台的隐藏链接，使打印时能从 id 解析全局名称。
 function loadProject(dir) {
   const p = JSON.parse(fs.readFileSync(path.join(dir, 'project.json'), 'utf8'));
   const st = p.targets.find(t => t.isStage);
@@ -18,7 +18,7 @@ function getTarget(p, name) {
 }
 const stageOf = p => p.targets.find(t => t.isStage);
 
-// Allocates ids no target, variable, list, broadcast or comment of the project already uses.
+// 分配项目中任何目标、变量、列表、广播或注释都未使用的 id。
 class Ids {
   constructor(p) {
     this.used = new Set();
@@ -37,7 +37,7 @@ class Ids {
 
 function isBlock(b) { return b && !Array.isArray(b); }
 
-// Every block of a script: the chain from `top` through `next`, plus everything its inputs hold.
+// 脚本的每个积木：从 `top` 沿 `next` 的链，以及其输入持有的所有内容。
 function chainIds(blocks, top, followNext = true) {
   const out = new Set();
   const stack = [top];
@@ -58,7 +58,7 @@ function chainIds(blocks, top, followNext = true) {
 const scriptIds = (blocks, top) => chainIds(blocks, top, true);
 const branchIds = (blocks, id) => chainIds(blocks, id, false);
 
-// Resolves a variable, list or broadcast reference the way the VM loader does: local by id, then global by id, then by name.
+// 按 VM 加载器的方式解析变量、列表或广播引用：先按 id 查局部，再按 id 查全局，最后按名称。
 function resolveRef(p, t, kind, name, id) {
   const st = stageOf(p);
   const dict = kind === 'broadcast' ? 'broadcasts' : kind === 'list' ? 'lists' : 'variables';
@@ -79,7 +79,7 @@ class Merger {
     this.created = [];
   }
 
-  // Finds or creates the destination variable, list or broadcast matching a source reference.
+  // 查找或创建与源引用匹配的目标变量、列表或广播。
   bind(srcT, dstT, kind, name, id) {
     const r = resolveRef(this.src, srcT, kind, name, id);
     if (!r) throw new Error(`${srcT.name}: unresolved ${kind} ${name} (${id})`);
@@ -110,7 +110,7 @@ class Merger {
     prim[2] = r.id;
   }
 
-  // Copies blocks from the source target into the destination target under fresh ids and rebinds data references.
+  // 将积木从源目标复制到目标目标，使用新 id 并重新绑定数据引用。
   copy(srcT, ids, dstT) {
     const map = new Map();
     for (const id of ids) map.set(id, this.ids.next());
@@ -135,7 +135,7 @@ class Merger {
       delete b.comment;
       dstT.blocks[map.get(id)] = b;
     }
-    // Parent links come from the copied graph, because a source child can be claimed by a dead fragment outside it.
+    // 父链接来自复制的图，因为源子积木可能被图外的死片段认领。
     for (const nid of map.values()) {
       const b = dstT.blocks[nid];
       if (!isBlock(b)) continue;
@@ -154,7 +154,7 @@ class Merger {
     return map.get(top);
   }
 
-  // Copies one statement with its substacks and returns its new id, unlinked.
+  // 复制一条语句及其子栈，返回新 id，未连接。
   copyBranch(srcT, id, dstT) {
     const map = this.copy(srcT, branchIds(srcT.blocks, id), dstT);
     const nb = dstT.blocks[map.get(id)];
@@ -170,7 +170,7 @@ function removeIds(t, ids) {
 }
 function removeScript(t, top) { removeIds(t, scriptIds(t.blocks, top)); }
 
-// Statement surgery on next-chains. Each id names a statement block in target t.
+// 对 next 链进行语句操作。每个 id 命名目标 t 中的一个语句积木。
 function lastOf(t, id) { while (t.blocks[id].next) id = t.blocks[id].next; return id; }
 
 function insertAfter(t, anchor, first) {
@@ -181,7 +181,7 @@ function insertAfter(t, anchor, first) {
   t.blocks[first].parent = anchor;
 }
 
-// Inserts a chain before `anchor`, which may be the first statement of a substack or follow a hat.
+// 将一条链插入 `anchor` 之前，`anchor` 可以是子栈的第一条语句或跟在帽子之后。
 function insertBefore(t, anchor, first) {
   const a = t.blocks[anchor], last = lastOf(t, first);
   const par = a.parent && t.blocks[a.parent];
@@ -194,7 +194,7 @@ function insertBefore(t, anchor, first) {
   a.parent = last;
 }
 
-// Detaches one statement (with its substacks) from its chain and deletes it.
+// 从链中分离一条语句（及其子栈）并删除它。
 function deleteStmt(t, id) {
   const b = t.blocks[id];
   const par = b.parent && t.blocks[b.parent];
@@ -212,7 +212,7 @@ function replaceStmt(t, old, first) {
   deleteStmt(t, old);
 }
 
-// Appends a chain to the end of a substack input (SUBSTACK or SUBSTACK2) of a C block.
+// 将一条链追加到 C 形积木的子栈输入（SUBSTACK 或 SUBSTACK2）末尾。
 function appendToSubstack(t, cblock, first, name = 'SUBSTACK') {
   const c = t.blocks[cblock];
   const inp = c.inputs[name];
@@ -220,7 +220,7 @@ function appendToSubstack(t, cblock, first, name = 'SUBSTACK') {
   insertAfter(t, lastOf(t, inp[1]), first);
 }
 
-// Pseudocode for locating scripts and statements by what they say rather than by id.
+// 按语句内容而非 id 定位脚本和语句的伪代码。
 function printer(t) { return makePrinter(t, t.__stage); }
 
 function hatText(t, top) { return printer(t).hat(t.blocks[top]); }
@@ -231,7 +231,7 @@ function scriptText(t, top) {
   return out.join('\n');
 }
 
-// First line of a statement's pseudocode, which identifies it without its substacks.
+// 语句伪代码的第一行，用它在不含子栈的情况下识别语句。
 function stmtHead(t, id) {
   const out = [];
   const b = t.blocks[id];
@@ -242,7 +242,7 @@ function stmtHead(t, id) {
   return out[0];
 }
 
-// Pseudocode of one statement with its substacks, without the statements after it.
+// 一个语句及其子栈的伪代码，不含其后的语句。
 function stmtText(t, id) {
   const out = [];
   const b = t.blocks[id];
@@ -258,7 +258,7 @@ function topScripts(t) {
   return Object.entries(t.blocks).filter(([, b]) => isBlock(b) && b.topLevel && pr.hat(b)).map(([id]) => id);
 }
 
-// Top-level scripts whose hat text equals `hat` (DEFINE hats match on proccode alone).
+// 帽子文本等于 `hat` 的顶层脚本（DEFINE 帽子只按 proccode 匹配）。
 function findScripts(t, hat) {
   return topScripts(t).filter(id => {
     const h = hatText(t, id);
@@ -272,7 +272,7 @@ function findScript(t, hat) {
   return s[0];
 }
 
-// Statements anywhere inside a script whose head line contains `needle`, in reading order.
+// 脚本内任意位置、首行包含 `needle` 的语句，按阅读顺序排列。
 function findStmts(t, top, needle) {
   const found = [];
   const visit = id => {
@@ -294,7 +294,7 @@ function findStmt(t, top, needle, nth = 0, expect = 1) {
   return s[nth];
 }
 
-// Sets a literal input of a block, keeping its shadow type.
+// 设置积木的字面量输入，保留其 shadow 类型。
 function setLiteral(t, id, input, value) {
   const inp = t.blocks[id].inputs[input];
   const v = inp[inp.length === 3 ? 2 : 1];
@@ -304,7 +304,7 @@ function setLiteral(t, id, input, value) {
   throw new Error(`${t.name}: input ${input} of ${id} is not a literal`);
 }
 
-// Literal slots inside a statement's own expressions (not its substacks or next), as {value, set}.
+// 语句自身表达式中（不含子栈或 next）的字面量槽，形如 {value, set}。
 function literalSlots(t, id) {
   const slots = [];
   const visit = (bid) => {
@@ -324,14 +324,14 @@ function literalSlots(t, id) {
   return slots;
 }
 
-// Replaces literal `from` with `to` inside one statement, checking how many slots changed.
+// 在一条语句内将字面量 `from` 替换为 `to`，并检查改变了多少槽。
 function replaceLiteral(t, id, from, to, expect = 1) {
   const s = literalSlots(t, id).filter(x => x.value === String(from));
   if (s.length !== expect) throw new Error(`${t.name}: ${s.length} literals "${from}" in ${stmtHead(t, id)} (expected ${expect})`);
   for (const x of s) x.set(to);
 }
 
-// Pairs the scripts of two targets by hat, identical bodies first, then most similar.
+// 按帽子配对两个目标的脚本，先配相同主体，再配最相似的。
 function pairScripts(ta, tb) {
   const mk = t => topScripts(t).map(id => {
     const text = scriptText(t, id);
@@ -359,7 +359,7 @@ function pairScripts(ta, tb) {
   return { pairs, onlyA, onlyB: ys.filter(y => !used.has(y)) };
 }
 
-// Rewrites every call's argument ids and input keys to match its prototype, positionally.
+// 按位置重写每次调用的参数 id 和输入键，使其匹配原型。
 function fixCalls(t, log) {
   const protos = new Map();
   for (const b of Object.values(t.blocks)) if (isBlock(b) && b.opcode === 'procedures_prototype') protos.set(b.mutation.proccode, b);

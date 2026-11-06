@@ -1,5 +1,5 @@
-// Prints the full state of chosen targets in the reference (via tools/ref-server.ts) and the port at chosen frames.
-// Usage: npx tsx tools/parity-inspect.ts <scenario> <frames: 1749,1750> [target name filter]
+// 打印参考实现（通过 tools/ref-server.ts）和移植版在指定帧所选目标的完整状态。
+// 用法：npx tsx tools/parity-inspect.ts <scenario> <frames: 1749,1750> [target name filter]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createPort, fullState, InputTimeline, type FullState, type Scenario } from './lib/port.ts';

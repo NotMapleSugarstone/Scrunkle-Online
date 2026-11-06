@@ -1,6 +1,6 @@
-// Edited list data in data/lists. Each file holds one list in the form the original editor's list import reads:
-// one item per line, every line in double quotes with inner quotes doubled, lines joined by CRLF.
-// Stage lists sit in data/lists, and a sprite's own lists in data/lists/<sprite>.
+// data/lists 中已编辑的列表数据。每个文件按原编辑器列表导入读取的形式保存一个列表：
+// 每行一项，每行用双引号包围，内部引号加倍，行间以 CRLF 连接。
+// 舞台列表位于 data/lists，角色自己的列表位于 data/lists/<sprite>。
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,17 +15,17 @@ export const LIST_DIR = path.join(ROOT, 'data', 'lists');
 export const SOURCE_SB3 = path.join(ROOT, 'game.sb3');
 export const PATCHED_SB3 = path.join(ROOT, 'out', 'patched.sb3');
 
-/** A file name for a list name, with the characters file systems reject replaced. */
+/** 列表名称对应的文件名，替换文件系统拒绝的字符。 */
 export function fileNameFor(name: string): string {
   return `${name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[. ]+$/, '')}.txt`;
 }
 
-/** Writes items the way the editor's import reads them back unchanged. */
+/** 按编辑器导入后能原样读回的方式写入项目。 */
 export function formatList(items: unknown[]): string {
   return items.map((v) => `"${String(v).replace(/"/g, '""')}"`).join('\r\n');
 }
 
-/** Reads a list file exactly as the editor's import does, with the column prompt answered 1. */
+/** 完全按编辑器导入的方式读取列表文件，列提示回答 1。 */
 export function parseList(text: string): { items: string[]; columns: number } {
   const rows = Papa.parse(text, { header: false }).data;
   if (rows.length === 0) return { items: [], columns: 0 };
@@ -38,13 +38,13 @@ export interface ListOverride {
   list: string;
   id: string;
   items: string[];
-  /** Columns the import would find; more than 1 means it would ask which column to use. */
+  /** 导入会找到的列数；大于 1 表示它会询问使用哪一列。 */
   columns: number;
 }
 
 type Project = { targets: { name: string; isStage: boolean; lists: Record<string, [string, unknown[]]> }[] };
 
-/** Every edited list in data/lists, matched to its list in the project. */
+/** data/lists 中每个已编辑列表，并匹配到项目中的对应列表。 */
 export function readOverrides(project: Project): ListOverride[] {
   if (!fs.existsSync(LIST_DIR)) return [];
   const out: ListOverride[] = [];
@@ -71,7 +71,7 @@ export function readOverrides(project: Project): ListOverride[] {
   return out;
 }
 
-/** Replaces each edited list's items in the project, as importing the files in the editor would. */
+/** 像在编辑器中导入文件一样，替换项目中每个已编辑列表的项目。 */
 export function applyOverrides(project: Project, overrides: ListOverride[]): void {
   for (const o of overrides) {
     const t = project.targets.find((x) => x.name === o.target)!;
@@ -79,7 +79,7 @@ export function applyOverrides(project: Project, overrides: ListOverride[]): voi
   }
 }
 
-/** The project with every edited list applied, packed beside the source project for the reference runner. */
+/** 应用所有已编辑列表后的项目，打包在源项目旁供参考运行器使用。 */
 export async function writePatchedProject(): Promise<string> {
   const zip = await JSZip.loadAsync(fs.readFileSync(SOURCE_SB3));
   const project = JSON.parse(await zip.file('project.json')!.async('string')) as Project;
@@ -90,7 +90,7 @@ export async function writePatchedProject(): Promise<string> {
   return PATCHED_SB3;
 }
 
-/** A hash of every file in data/lists, empty when there are none, so cached and loaded references can be matched to the data. */
+/** data/lists 中每个文件的哈希，没有文件时为空，使缓存和已加载的参考实现能与数据匹配。 */
 export function listsKey(): string {
   if (!hasOverrides()) return '';
   const hash = createHash('sha1');

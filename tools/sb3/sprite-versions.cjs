@@ -1,6 +1,6 @@
-// Compares every top-level script of one sprite across several builds, given as unpacked project folders.
-// Scripts are keyed by hat text (with a counter for repeats). Each row gives a letter per build; the same letter means the same code.
-// Usage: node tools/sb3/sprite-versions.cjs <sprite> <label=folder>... [--all]
+// 比较多个构建中一个角色的每个顶层脚本，构建以解包的项目文件夹给出。
+// 脚本按帽子文本索引（重复项加计数器）。每行每个构建一个字母；相同字母表示相同代码。
+// 用法：node tools/sb3/sprite-versions.cjs <sprite> <label=folder>... [--all]
 const path = require('path');
 const L = require('./sb3.cjs');
 

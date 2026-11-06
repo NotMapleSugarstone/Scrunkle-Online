@@ -1,5 +1,5 @@
-// Converts the extracted source project into TypeScript modules under src/game/generated.
-// Usage: npx tsx tools/transpile/main.ts
+// 将解压的源项目转换为 src/game/generated 下的 TypeScript 模块。
+// 用法：npx tsx tools/transpile/main.ts
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseProject, sanitize } from './ir.ts';
@@ -20,7 +20,7 @@ fs.mkdirSync(outDir, { recursive: true });
 const targets = parseProject(project);
 const stage = targets.find((t) => t.isStage)!;
 
-// Lists some block writes, by id. The page also writes the saved lists, so those count as written too.
+// 列出一些积木写入的列表及其 id。页面也会写入保存的列表，因此这些也算已写入。
 const LIST_WRITES = new Set(['data_addtolist', 'data_deleteoflist', 'data_deletealloflist', 'data_insertatlist', 'data_replaceitemoflist']);
 const writtenLists = new Set<string>();
 for (const t of project.targets) {
@@ -52,7 +52,7 @@ for (const t of targets) {
   console.log(`${t.name.padEnd(22)} -> ${file}.ts  scripts=${t.scripts.length} procs=${t.procs.size} units=${units} functions=${plains} lines=${code.split('\n').length}`);
 }
 
-// List monitors that blocks can show or hide.
+// 积木可显示或隐藏的列表监视器。
 const monitors = (project.monitors ?? [])
   .filter((m: any) => m.mode === 'list' && m.spriteName === null)
   .map((m: any) => {
@@ -61,7 +61,7 @@ const monitors = (project.monitors ?? [])
   })
   .filter(Boolean);
 
-// Stage variable monitors; the page draws the ones that are shown.
+// 舞台变量监视器；页面绘制已显示的那些。
 const varMonitors = (project.monitors ?? [])
   .filter((m: any) => m.opcode === 'data_variable' && m.spriteName === null)
   .map((m: any) => {
@@ -70,7 +70,7 @@ const varMonitors = (project.monitors ?? [])
   })
   .filter(Boolean);
 
-// The graphic effects that blocks set or change, so the page can compile their shaders before play.
+// 积木设置或更改的图形效果，使页面能在游玩前编译其着色器。
 const effects = new Set<string>();
 for (const t of project.targets) {
   for (const b of Object.values(t.blocks) as any[]) {
@@ -94,7 +94,7 @@ export const effectsUsed: string[] = ${JSON.stringify([...effects].sort())};
 `,
 );
 
-// Costume, skin and sound tables from the reference renderer's measurements.
+// 来自参考渲染器测量结果的造型、皮肤和声音表。
 const skins: unknown[] = [];
 const costumes: unknown[][] = [];
 const sounds: unknown[][] = [];

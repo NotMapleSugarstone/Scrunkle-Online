@@ -1,8 +1,8 @@
-// Plays a project in headless Edge and runs scripted sessions against it.
-//   node tools/sb3/drive.cjs <project.sb3> <script.cjs> [shotDir]      runs one script and exits
-//   node tools/sb3/drive.cjs <project.sb3> --serve <dir> [shotDir]     stays loaded and runs each <dir>/*.cjs dropped in, writing <name>.out
-// A script exports async (h) => {...} with h.press, h.hold, h.wait, h.shot, h.v, h.setv, h.eval, h.log and h.reload.
-// Stop a server by creating <dir>/STOP.
+// 在无头 Edge 中播放项目，并对其运行脚本化会话。
+//   node tools/sb3/drive.cjs <project.sb3> <script.cjs> [shotDir]      运行一个脚本后退出
+//   node tools/sb3/drive.cjs <project.sb3> --serve <dir> [shotDir]     保持加载并运行放入 <dir>/*.cjs 的脚本，写出 <name>.out
+// 脚本导出 async (h) => {...}，其中 h 有 press、hold、wait、shot、v、setv、eval、log 和 reload。
+// 创建 <dir>/STOP 以停止服务器。
 const path = require('path');
 const fs = require('fs');
 const http = require('http');

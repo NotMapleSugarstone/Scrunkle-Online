@@ -1,4 +1,4 @@
-// Page used by tools/visual.ts: runs a scenario frame by frame without real time and returns chosen frames as images.
+// tools/visual.ts 使用的页面：不按真实时间逐帧运行场景，并返回选定帧的图像。
 import { Game } from './game.ts';
 import { InputTimeline, type Scenario } from '../engine/scenario.ts';
 
@@ -18,7 +18,7 @@ const api = {
     timeline = new InputTimeline(sc.events);
     await game.load(() => {});
   },
-  /** Runs `n` frames and returns PNG data URLs for the frames listed in `shotAt`. */
+  /** 运行 `n` 帧，并为 `shotAt` 中的帧返回 PNG data URL。 */
   run(n: number, shotAt: number[]): Record<number, string> {
     const shots: Record<number, string> = {};
     const want = new Set(shotAt);
@@ -44,7 +44,7 @@ function loadImg(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Per-pixel difference of two PNG data URLs: mean channel error, share of pixels over 24, and a difference image. */
+/** 两个 PNG data URL 的逐像素差异：平均通道误差、超过 24 的像素比例，以及差异图像。 */
 async function diff(a: string, b: string): Promise<{ mean: number; over: number; diff: string }> {
   const [ia, ib] = await Promise.all([loadImg(a), loadImg(b)]);
   const w = ia.width;

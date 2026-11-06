@@ -1,5 +1,5 @@
-// Runs a scenario in the port's page in a headless browser and saves chosen frames as images.
-// Usage: npx tsx tools/port-shots.ts <scenario-file> <frame,frame,...> [outdir]
+// 在无头浏览器的移植版页面中运行场景，并将选定帧保存为图像。
+// 用法：npx tsx tools/port-shots.ts <scenario-file> <frame,frame,...> [outdir]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createServer } from 'vite';

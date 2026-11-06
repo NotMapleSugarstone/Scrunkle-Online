@@ -1,7 +1,7 @@
-// Lists every custom block call with its arguments during one frame, in the reference and the port, and prints the
-// first call that differs. It finds the block that computes differently inside a long warp procedure.
-// Transpile with PROBE=1 first (PROBE=1 npm run transpile), and have tools/ref-server.ts running.
-// Usage: npx tsx tools/parity-probe.ts <scenario> <frame>
+// 列出一帧中参考实现和移植版的每个自定义积木调用及其参数，并打印
+// 第一个不同的调用。用于找出长 warp 过程中计算不同的积木。
+// 先以 PROBE=1 转译（PROBE=1 npm run transpile），并确保 tools/ref-server.ts 正在运行。
+// 用法：npx tsx tools/parity-probe.ts <scenario> <frame>
 import fs from 'node:fs';
 import path from 'node:path';
 import { serverPost, SERVER } from './lib/ref-client.ts';
@@ -15,7 +15,7 @@ const evalRef = async (code: string) => (await fetch(`${SERVER}/eval`, { method:
 
 await evalRef(`H.probe = { frame: ${frame}, log: [] }; 1`);
 await serverPost('/run', { scenario: { ...sc, frames: frame }, fullAt: [], lists: listsKey() });
-// canon() keeps the types apart, which the comparison needs, so the page formats each call with the same rules.
+// canon() 会保留类型差异，比较需要这些差异，因此页面用相同规则格式化每次调用。
 const refCalls = JSON.parse(
   await evalRef(`H.probe.log.map(([p, a]) => p + ' ' + JSON.stringify(a.map((v) => typeof v === 'number' ? (Object.is(v, -0) ? 'n-0' : 'n' + v) : typeof v === 'string' ? 's' + JSON.stringify(v) : typeof v === 'boolean' ? (v ? 'bT' : 'bF') : v === undefined ? 'u' : 'o' + JSON.stringify(v))))`),
 ) as string[];

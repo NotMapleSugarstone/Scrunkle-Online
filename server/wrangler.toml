@@ -3,7 +3,7 @@ main = "worker/index.ts"
 compatibility_date = "2026-01-01"
 send_metrics = false
 
-# Origins (no path, lowercase) of published copies of the game. Any localhost port is always allowed.
+# 游戏已发布副本的来源（不含路径，小写）。任意 localhost 端口始终允许。
 [vars]
 ALLOWED_ORIGINS = "https://maplesugarstone.github.io"
 ROOMS_PER_DAY = "300"
@@ -11,8 +11,8 @@ ROOMS_PER_DAY = "300"
 [observability]
 enabled = true
 
-# Only the room server's own log lines are kept. A log for every run would count each relayed message
-# against the daily log limit.
+# 只保留房间服务器自身的日志行。每次运行都记录日志会让每条转发消息
+# 计入每日日志限额。
 [observability.logs]
 invocation_logs = false
 
@@ -24,7 +24,7 @@ class_name = "Room"
 name = "LOBBY"
 class_name = "Lobby"
 
-# The free plan needs Durable Objects backed by SQLite.
+# 免费计划需要由 SQLite 支持的 Durable Objects。
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room", "Lobby"]

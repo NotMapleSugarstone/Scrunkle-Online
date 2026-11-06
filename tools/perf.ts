@@ -1,5 +1,5 @@
-// Times the port on a scenario: milliseconds per frame overall, during play (inPlay in src/game/screens.ts), and the slowest frames.
-// Usage: npx tsx tools/perf.ts <scenario-file>   (add --cpu-prof through NODE_OPTIONS to profile)
+// 测量移植版在场景中的耗时：总体每帧毫秒数、游玩期间（src/game/screens.ts 中的 inPlay）以及最慢的帧。
+// 用法：npx tsx tools/perf.ts <scenario-file>   （通过 NODE_OPTIONS 加 --cpu-prof 可分析性能）
 import fs from 'node:fs';
 import path from 'node:path';
 import { createPort, InputTimeline, type Scenario } from './lib/port.ts';

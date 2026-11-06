@@ -1,5 +1,5 @@
-// Reads and writes PNG images as RGBA pixels, for patches that import art: 8-bit gray, RGB, palette (any bit depth),
-// gray with alpha and RGBA, without interlacing.
+// 以 RGBA 像素读写 PNG 图像，用于导入美术的补丁：8 位灰度、RGB、调色板（任意位深）、
+// 带 alpha 的灰度和 RGBA，不含隔行扫描。
 import zlib from 'node:zlib';
 
 export interface Image { w: number; h: number; data: Uint8Array }
@@ -78,7 +78,7 @@ export function writePng(img: Image): Buffer {
   return Buffer.concat([SIG, chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
 }
 
-/** The smallest box that holds every pixel with any alpha. */
+/** 包含所有非零 alpha 像素的最小框。 */
 export function contentBox(img: Image): { x: number; y: number; w: number; h: number } {
   let x0 = img.w, y0 = img.h, x1 = -1, y1 = -1;
   for (let y = 0; y < img.h; y++) for (let x = 0; x < img.w; x++) if (img.data[(y * img.w + x) * 4 + 3] > 0) {
@@ -100,14 +100,14 @@ export function mirror(img: Image): Image {
   return { w: img.w, h: img.h, data };
 }
 
-/** Each pixel repeated in a k by k square, which keeps pixel art sharp. */
+/** 每个像素重复为 k x k 方块，保持像素画清晰。 */
 export function enlarge(img: Image, k: number): Image {
   const w = img.w * k, h = img.h * k, data = new Uint8Array(w * h * 4);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) data.set(img.data.subarray((((y / k) | 0) * img.w + ((x / k) | 0)) * 4, (((y / k) | 0) * img.w + ((x / k) | 0)) * 4 + 4), (y * w + x) * 4);
   return { w, h, data };
 }
 
-/** Scales an image down to fit a size, averaging the colors of the pixels each output pixel covers by their alpha. */
+/** 将图像缩小到指定尺寸，按 alpha 对每个输出像素覆盖的像素颜色取平均。 */
 export function shrink(img: Image, maxW: number, maxH: number): Image {
   const s = Math.min(1, maxW / img.w, maxH / img.h);
   const w = Math.max(1, Math.round(img.w * s)), h = Math.max(1, Math.round(img.h * s)), data = new Uint8Array(w * h * 4);

@@ -1,11 +1,11 @@
-// Scripted input timelines, used by parity and visual tests.
+// 脚本化输入时间线，用于一致性测试和视觉测试。
 import type { Value } from './cast.ts';
 import type { PlayerInput } from './io.ts';
 
 /**
- * Input events in scenario files. Keys and mouse belong to player slot 0 unless `p` is given. `cloud` is a cloud
- * variable write from another player. `var` sets a stage variable and `list` replaces the items of a list, found by
- * its target's name and the list's id, before the frame, for test setups only.
+ * 场景文件中的输入事件。按键和鼠标默认属于玩家槽位 0，除非提供 `p`。`cloud` 表示
+ * 其他玩家的云变量写入。`var` 设置舞台变量，`list` 在帧前替换列表项目，
+ * 列表按目标名称和列表 id 查找；仅用于测试设置。
  */
 export type ScenarioEvent =
   | { f: number; type: 'key'; key: string; down: boolean; p?: number }
@@ -20,11 +20,11 @@ export interface Scenario {
   seed: number;
   frames: number;
   events: ScenarioEvent[];
-  /** The player's account name, which saves are tied to. Empty when absent. */
+  /** 玩家的账号名，存档与之关联。没有时为空白。 */
   username?: string;
 }
 
-/** Turns scenario events into per-frame player inputs. */
+/** 将场景事件转换为逐帧的玩家输入。 */
 export class InputTimeline {
   private held: Set<string>[] = [new Set(), new Set(), new Set(), new Set()];
   private mouse = { x: 0, y: 0, down: false };

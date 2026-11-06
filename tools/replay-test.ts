@@ -1,6 +1,6 @@
-// Records the matches in a scenario with the page's replay recorder, plays each recording back from its start
-// snapshot, and checks that every state hash it kept and the final state match the recorded run.
-// Usage: npx tsx tools/replay-test.ts <scenario-file>
+// 用页面的回放录制器记录场景中的比赛，从起始快照播放每个录像，
+// 并检查它保存的每个状态哈希和最终状态是否与录制运行一致。
+// 用法：npx tsx tools/replay-test.ts <scenario-file>
 import fs from 'node:fs';
 import path from 'node:path';
 import { createPort, InputTimeline, type Scenario } from './lib/port.ts';
@@ -22,14 +22,14 @@ for (let f = 1; f <= sc.frames; f++) {
   const inputs = tl.inputsFor(f);
   rt.stepFrame(inputs);
   recorder.frame(inputs, runtimeState(rt));
-  // The recording's last frame is the one before the match ended.
+  // 录像的最后一帧是比赛结束前的一帧。
   if (pending) {
     finished.push({ replay: pending, endHash: lastHash });
     pending = null;
   }
   lastHash = snapshotHash(saveSnapshot(rt));
 }
-// A match still running when the scenario ends is finished by a state that shows no match.
+// 结束时仍在进行的比赛会用一个显示无比赛的状态收尾。
 const live = runtimeState(rt);
 const ended: FrameState = { ...live, running: () => false };
 recorder.frame([], ended);
@@ -41,7 +41,7 @@ if (finished.length === 0) {
 }
 let ok = true;
 for (const { replay, endHash } of finished) {
-  // Stored replays go through the store's exact JSON.
+  // 存储的回放会经过存储层的精确 JSON。
   const body = fromExactJson<ReplayBody>(toExactJson(replay.body));
   const play = createPort(0);
   play.logPen = false;

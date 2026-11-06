@@ -1,24 +1,23 @@
-// What the page keeps between visits so a player's progress survives a reload, and how save codes become files.
+// 页面在两次访问之间保留的内容，使玩家进度在刷新后仍在，以及存档代码如何变成文件。
 import type { Runtime } from '../engine/runtime.ts';
 import { toStr, type Value } from '../engine/cast.ts';
 import { GAME_TITLE } from './page.ts';
 
 /**
- * The stage lists that hold the player's progress and settings. `!SAVE_DATA` is the whole save, the one the game's
- * save codes hold. The settings and keybinds lists are kept as well, because the settings menu changes them
- * without copying them into `!SAVE_DATA`.
+ * 保存玩家进度和设置的舞台列表。`!SAVE_DATA` 是完整存档，游戏的存档代码保存它。
+ * 设置和按键列表也会保留，因为设置菜单会修改它们，但不会复制到 `!SAVE_DATA`。
  */
 export const SAVE_LISTS = ['!SAVE_DATA', '!Global_GameSettings', '!G_Keybinds'];
 
-/** Stage variables to keep. This game keeps its progress in lists only. */
+/** 要保留的舞台变量。此游戏只用列表保存进度。 */
 export const SAVE_VARS: string[] = [];
 
-/** The game asks only for save and art codes, so the question box also takes a text file as the answer. */
+/** 游戏只请求存档代码和美术代码，因此问题框也接受文本文件作为答案。 */
 export const CODE_ANSWERS = true;
 
 /**
- * Stage lists whose monitors the page never draws. The save screen shows the raw save and the code to copy, and
- * Save downloads the code as a file instead.
+ * 页面从不绘制其监视器的舞台列表。存档界面显示原始存档和可复制代码，
+ * “保存”则改为将代码下载为文件。
  */
 export const HIDDEN_LISTS = ['!SAVE_DATA', 'Save Code'];
 
@@ -29,9 +28,8 @@ function stageList(rt: Runtime, name: string): { items: Value[]; visible: boolea
 }
 
 /**
- * The code the game shows for the player to copy, with a file name for it, or null. Save on the save screen and
- * saving a piece in art mode both put "Copy This Code:" and the code in the shown `Save Code` list. The save screen
- * also shows `!SAVE_DATA`.
+ * 游戏显示给玩家复制的代码及其文件名，或 null。存档界面的“保存”和美术模式中保存作品
+ * 都会将“Copy This Code:”和代码放入显示的 `Save Code` 列表。存档界面还会显示 `!SAVE_DATA`。
  */
 export function shownCode(rt: Runtime): { code: string; name: string } | null {
   const list = stageList(rt, 'Save Code');

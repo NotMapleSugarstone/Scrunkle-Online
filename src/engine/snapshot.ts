@@ -1,5 +1,5 @@
-// Whole-simulation snapshots for rollback. A snapshot is plain data except for the pen command
-// array, which is shared and append-only, so taking one each frame stays cheap.
+// 用于回滚的整局模拟快照。快照是普通数据，除了画笔命令
+// 数组；该数组共享且只追加，因此每帧取快照的成本很低。
 import type { Value } from './cast.ts';
 import type { PenCmd, Runtime } from './runtime.ts';
 import type { PlayerState } from './sound-model.ts';
@@ -67,7 +67,7 @@ export interface Snapshot {
   penCreated: boolean;
   monitorVisible: Record<string, boolean>;
   mouse: [number, number, boolean];
-  /** Keys held per player slot after the frame, sorted, which decide whether a key is a new press next frame. */
+  /** 帧后各玩家槽位按住的键（已排序），用于判断下一帧某键是否为新按下。 */
   keys: string[][];
   targets: TargetSnap[];
   executable: number[];
@@ -78,7 +78,7 @@ export interface Snapshot {
   players: PlayerSnap[][];
 }
 
-/** Copies a target's lists. Fixed lists never change, so the copy shares them, frozen as the runtime keeps them. */
+/** 复制目标的列表。固定列表永不改变，因此副本共享它们，并按运行时的方式冻结。 */
 function copyLists(l: Record<string, Value[]>, fixed: Set<string>): Record<string, Value[]> {
   const out: Record<string, Value[]> = {};
   for (const k in l) {
@@ -95,7 +95,7 @@ function copyFrame(f: Frame): Frame {
   return out;
 }
 
-/** Threads whose resolution can still be observed: in the list and not killed. */
+/** 仍可观察到其结果的线程：在列表中且未被杀死。 */
 function live(rt: Runtime, th: Thread): boolean {
   return !th.isKilled && !th.orphan;
 }
@@ -173,7 +173,7 @@ export function saveSnapshot(rt: Runtime): Snapshot {
         serial: p.serial,
         order: p.order,
         waiters: p.waiters.filter((th) => live(rt, th)).map((th) => th.id),
-        // A deleted owner behaves like no owner; saving it as null keeps snapshots comparable.
+        // 已删除的持有者等同于无持有者；保存为 null 可让快照保持可比较。
         owner: p.owner && liveTargets.has(p.owner.id) ? p.owner.id : null,
       })),
     ),
@@ -195,15 +195,15 @@ export function loadSnapshot(rt: Runtime, s: Snapshot): void {
   rt.penCreated = s.penCreated;
   rt.monitorVisible = { ...s.monitorVisible };
   [rt.io.mouseX, rt.io.mouseY, rt.io.mouseDown] = s.mouse;
-  // Replays saved before snapshots held keys start with none held.
+  // 在快照包含按键状态之前保存的回放，开始时没有任何按住的键。
   rt.io.keys = rt.io.keys.map((_, p) => new Set(s.keys?.[p] ?? []));
 
-  // The pen array is append-only between clears, so truncating it restores the snapshot's view.
+  // 画笔数组在两次清空之间只追加，因此截断它即可恢复快照的视图。
   s.penCmds.length = s.penLength;
   rt.pen = { cmds: s.penCmds, gen: s.penGen };
   rt.penEpoch++;
 
-  // Originals keep their objects (generated code holds the stage); clones are rebuilt.
+  // 原体保留其对象（生成代码持有舞台）；克隆体会重建。
   const originals = new Map<number, Target>();
   for (const sprite of rt.sprites) originals.set(sprite.index, sprite.original);
   const byId = new Map<number, Target>();
@@ -255,7 +255,7 @@ export function loadSnapshot(rt: Runtime, s: Snapshot): void {
     target.scriptThreads[ts.script] = th;
     return th;
   });
-  // A waiter that is no longer in the list resolves to nothing, so a placeholder stands in for it.
+  // 已不在列表中的等待者会解析为空，因此用占位符代替它。
   const resolveThread = (id: number): Thread => threads.get(id) ?? orphanPlaceholder(rt);
   rt.pending = s.pending.map(resolveThread);
   rt.questions = s.questions.map((q) => ({ text: q.text, thread: q.thread < 0 ? orphanPlaceholder(rt) : resolveThread(q.thread), target: byId.get(q.target) ?? rt.stage }));
@@ -282,10 +282,10 @@ function orphanPlaceholder(rt: Runtime): Thread {
   return th;
 }
 
-// Plain JSON writes -0 as 0 and NaN and the infinities as null. Game values hold all four, so they travel as tagged objects.
+// 普通 JSON 会把 -0 写成 0，把 NaN 和无穷写成 null。游戏值包含这四种，因此用带标记对象传输。
 const SPECIAL: [string, number][] = [['-0', -0], ['NaN', NaN], ['Inf', Infinity], ['-Inf', -Infinity]];
 
-/** JSON text that keeps -0, NaN and the infinities, for snapshots and anything that holds one. */
+/** 保留 -0、NaN 和无穷的 JSON 文本，用于快照及任何持有快照的内容。 */
 export function toExactJson(value: unknown): string {
   return JSON.stringify(value, (_k, v) => {
     if (typeof v !== 'number' || (Number.isFinite(v) && !Object.is(v, -0))) return v;
@@ -294,7 +294,7 @@ export function toExactJson(value: unknown): string {
   });
 }
 
-/** Reads `toExactJson` text. Keys named `__proto__` are dropped, because the text may come from someone else's file. */
+/** 读取 `toExactJson` 文本。名为 `__proto__` 的键会被丢弃，因为文本可能来自他人的文件。 */
 export function fromExactJson<T>(text: string): T {
   return JSON.parse(text, (k, v) => {
     if (k === '__proto__') return undefined;
@@ -306,7 +306,7 @@ export function fromExactJson<T>(text: string): T {
   }) as T;
 }
 
-/** Snapshot as JSON text, for sending to another player. The pen commands it needs are copied in. */
+/** 以 JSON 文本表示快照，用于发送给其他玩家。所需画笔命令会被复制进去。 */
 export function snapshotToJson(s: Snapshot): string {
   return toExactJson({ ...s, penCmds: s.penCmds.slice(0, s.penLength) });
 }

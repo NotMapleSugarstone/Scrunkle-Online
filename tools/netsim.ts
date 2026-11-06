@@ -1,7 +1,7 @@
-// Simulated network test for the rollback session: two peers on one virtual clock with latency,
-// jitter, loss and clock drift. Each peer plays its seat's keys from a recorded scenario, and the
-// test checks both end in the same state.
-// Usage: npx tsx tools/netsim.ts [peers] [frames] [latencyMs] [jitterMs] [loss] [dropAt] [scenario] [delayFrames]
+// 回滚会话的模拟网络测试：两个对端共用一个虚拟时钟，带延迟、
+// 抖动、丢包和时钟漂移。每个对端按录制场景播放自己座位的按键，
+// 测试检查两者最终状态相同。
+// 用法：npx tsx tools/netsim.ts [peers] [frames] [latencyMs] [jitterMs] [loss] [dropAt] [scenario] [delayFrames]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createPort, InputTimeline, T0, type Scenario } from './lib/port.ts';
@@ -19,15 +19,15 @@ const latency = Number(process.argv[4] ?? 60);
 const jitter = Number(process.argv[5] ?? 20);
 const loss = Number(process.argv[6] ?? 0.05);
 const scenarioFile = process.argv[8] ?? 'tests/scenarios/versus.json';
-/** Input delay in frames. The lobby starts at 1. */
+/** 输入延迟，以帧为单位。大厅从 1 开始。 */
 const inputDelay = Number(process.argv.slice(9).find((a) => !a.startsWith('--')) ?? 2);
 const scenario: Scenario = JSON.parse(fs.readFileSync(path.resolve(scenarioFile), 'utf8'));
 const seed = scenario.seed;
 const FRAME = 1000 / 30;
 
 /**
- * Seat 1 plays the scenario's Player 2 keys, and seat 0 plays every other key. Seat 0 also drives the mouse and
- * answers the game's questions, as the first seat does in the page (src/client/online.ts).
+ * 座位 1 播放场景中的玩家 2 按键，座位 0 播放其他所有按键。座位 0 还驱动鼠标并
+ * 回答游戏问题，与页面中第一个座位的行为一致（src/client/online.ts）。
  */
 function scriptFor(seat: number): (tick: number) => PlayerInput {
   const tl = new InputTimeline(scenario.events);
@@ -83,8 +83,8 @@ const sessions = seats.map((seat) => {
     },
   });
 });
-// With --jumps, record each frame's drawn targets as first shown and as finally corrected, to find what visibly
-// jumps when a rollback corrects a prediction.
+// 使用 --jumps 时，记录每帧目标首次显示和最终修正后的绘制结果，以找出回滚修正预测时
+// 明显跳动的内容。
 const jumps = process.argv.includes('--jumps');
 type Seen = Map<number, { play: boolean; targets: Map<string, string> }>;
 const firstSeen: Seen[] = seats.map(() => new Map());
@@ -106,7 +106,7 @@ if (jumps) {
     };
   });
 }
-// With --replay, each peer records its confirmed frames as an online page does (src/client/main.ts).
+// 使用 --replay 时，每个对端像在线页面一样记录已确认帧（src/client/main.ts）。
 const replays = process.argv.includes('--replay');
 const recordings: FinishedReplay[][] = seats.map(() => []);
 const recorders = seats.map((seat) => {
@@ -123,7 +123,7 @@ const stalledTicks = seats.map(() => 0);
 const drift = seats.map((s) => 1 + (s - (peers - 1) / 2) * 0.002);
 seats.forEach((s) => push({ t: s * 7, kind: 'tick', peer: s }));
 
-// Optional 7th argument: the last seat disconnects at this tick, and the host drops it after 5 s.
+// 可选的第七个参数：最后一个座位在此 tick 断开，房主会在 5 秒后将其移除。
 const dropAt = Number(process.argv[7] ?? 0);
 const leaver = peers - 1;
 const gone = new Set<number>();
@@ -152,7 +152,7 @@ while (queue.length || dropEvents.length) {
     gone.add(e.peer);
     continue;
   }
-  // Like the page, a tick that does not advance offers the same input again next time.
+  // 与页面一样，未推进的 tick 会在下一次再次提供相同输入。
   if (s.tick(scripts[e.peer](ticks[e.peer]))) ticks[e.peer]++;
   else stalledTicks[e.peer]++;
   if (dropAt && e.peer === 0 && !dropSent && gone.has(leaver) && s.stats.silentFor[leaver] > 5000) {
@@ -170,7 +170,7 @@ while (queue.length || dropEvents.length) {
   if (!done && ticks[e.peer] + stalledTicks[e.peer] < frames * 3) push({ t: now + FRAME * drift[e.peer], kind: 'tick', peer: e.peer });
 }
 
-// Every remaining peer's state at the common confirmed frame must agree.
+// 所有剩余对端在共同确认帧的状态必须一致。
 const live = sessions.filter((_, i) => !gone.has(i));
 const target = Math.min(...live.map((x) => x.confirmedFrame()));
 const hashes = live.map((x) => {
@@ -179,7 +179,7 @@ const hashes = live.map((x) => {
 });
 const agree = hashes.every((h) => h === hashes[0] && h !== -1);
 if (!agree) {
-  // Find the first retained frame where seat 0 and seat 1 differ, and show what differs.
+  // 找到座位 0 和座位 1 不同的第一个保留帧，并显示不同之处。
   const a = (sessions[0] as unknown as { snaps: Map<number, any> }).snaps;
   const b = (sessions[1] as unknown as { snaps: Map<number, any> }).snaps;
   const common = [...a.keys()].filter((f) => b.has(f)).sort((x, y) => x - y);
@@ -203,7 +203,7 @@ if (!agree) {
   sessions.forEach((x, i) => console.log(`seat ${i}: ${describe(x.rt)}`));
 }
 if (replays) {
-  // A match still running at the end is finished by a state that shows no match.
+  // 结束时仍在进行的比赛会用一个显示无比赛的状态收尾。
   recorders.forEach((r, seat) => {
     if (!r) return;
     const s = sessions[seat];

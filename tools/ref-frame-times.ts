@@ -1,5 +1,5 @@
-// Times every frame of a scenario in the original runtime and reports the slowest frames, to see what a script costs.
-// Usage: npx tsx tools/ref-frame-times.ts <scenario.json> [project.sb3] [--out=times.txt]   (--out writes one time per frame)
+// 测量原运行时中场景每一帧的耗时并报告最慢的帧，以了解脚本开销。
+// 用法：npx tsx tools/ref-frame-times.ts <scenario.json> [project.sb3] [--out=times.txt]   （--out 每帧写入一个时间）
 import fs from 'node:fs';
 import path from 'node:path';
 import { openReference } from './lib/reference.ts';

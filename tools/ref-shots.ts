@@ -1,5 +1,5 @@
-// Runs a scenario on the reference and saves screenshots, to see what the original shows.
-// Usage: npx tsx tools/ref-shots.ts <scenario-file> <frame,frame,...> [outdir]
+// 在参考实现上运行场景并保存截图，以查看原版显示的内容。
+// 用法：npx tsx tools/ref-shots.ts <scenario-file> <frame,frame,...> [outdir]
 import fs from 'node:fs';
 import path from 'node:path';
 import { openReference, ROOT } from './lib/reference.ts';

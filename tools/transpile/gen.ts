@@ -1,6 +1,6 @@
-// Generates one TypeScript module per target from the parsed tree.
-// Code that can never suspend becomes plain functions. Code that can suspend becomes a
-// resumable unit: a switch over resume labels with its state in a plain-data frame.
+// 从解析树为每个目标生成一个 TypeScript 模块。
+// 永远不会挂起的代码生成普通函数。可能挂起的代码生成可恢复单元：在恢复标签上
+// 执行 switch，并将状态保存在普通数据帧中。
 import type { Expr, Lit, ProcIR, ScriptIR, Stmt, StoreRef, TargetIR } from './ir.ts';
 import { sanitize } from './ir.ts';
 import { COMPILED } from '../../src/engine/defs.ts';
@@ -16,22 +16,22 @@ interface C {
 
 const PROMISE_OPS = new Set(['sound_setvolumeto', 'sound_changevolumeby', 'sound_seteffectto', 'sound_changeeffectby', 'sound_playuntildone', 'sensing_askandwait']);
 const WAIT_OPS = new Set(['control_wait', 'control_wait_until', 'event_broadcastandwait', 'motion_glidesecstoxy']);
-/** Custom blocks that a page can replace with TypeScript through `rt.natives`. */
+/** 页面可通过 `rt.natives` 用 TypeScript 替换的自定义积木。 */
 const NATIVE_PROCS = new Set<string>();
-/** Custom blocks that tools call through `rt.procs`, such as the AI tournament playing the built-in AI for the player. */
+/** 工具通过 `rt.procs` 调用的自定义积木，例如 AI 锦标赛替玩家运行内置 AI。 */
 const EXPOSED_PROCS = new Set<string>();
-/** With PROBE=1, every transpiled custom block reports its arguments to `rt.probe` (tools/parity-probe.ts). */
+/** 使用 PROBE=1 时，每个转译后的自定义积木都会向 `rt.probe` 报告参数（tools/parity-probe.ts）。 */
 const PROBE = process.env.PROBE === '1';
 
 export interface Analysis {
-  /** proccode -> can suspend when run in warp context */
+  /** proccode -> 在 warp 上下文中运行时能否挂起 */
   suspW: Map<string, boolean>;
-  /** proccode -> can suspend when run in non-warp context */
+  /** proccode -> 在非 warp 上下文中运行时能否挂起 */
   suspN: Map<string, boolean>;
   warnings: string[];
 }
 
-// ------------------------------------------------------------------ analysis
+// ------------------------------------------------------------------ 分析
 
 function walk(stmts: Stmt[], fn: (s: Stmt) => void): void {
   for (const s of stmts) {
@@ -47,7 +47,7 @@ function exprImpure(e: Expr | undefined): boolean {
   if (!e) return false;
   if (e.k !== 'op') return false;
   if (e.op === 'operator_random') return true;
-  // Touching the edge reads the drawn bounds, which leaves the renderer holding the sprite's hull.
+  // 接触边缘会读取绘制边界，使渲染器保留角色的凸包。
   if (e.op === 'sensing_touchingobject') {
     const m = e.in.TOUCHINGOBJECTMENU;
     if (!m || m.k !== 'lit' || m.v === '_edge_') return true;
@@ -63,8 +63,8 @@ export function analyze(t: TargetIR): Analysis {
     suspN.set(code, false);
   }
   const warnings: string[] = [];
-  // The original yields on a non-warp call to a procedure that is already a few calls up the stack, so a
-  // procedure that can call itself again through any chain of calls must be able to suspend.
+  // 原版在非 warp 调用一个已在调用栈上方几层的自定义积木时会 yield，因此
+  // 能通过任意调用链再次调用自身的过程必须能够挂起。
   const callees = new Map<string, Set<string>>();
   for (const p of t.procs.values()) {
     const out = new Set<string>();
@@ -123,7 +123,7 @@ export function analyze(t: TargetIR): Analysis {
       }
     }
   }
-  // Anomalies the generator does not model exactly.
+  // 生成器无法精确建模的异常情况。
   for (const p of t.procs.values()) {
     walk(p.body, (s) => {
       if (s.k === 'op' && WAIT_OPS.has(s.op) && (p.warp)) warnings.push(`${t.name}: ${s.op} inside warp procedure "${p.proccode}"`);
@@ -134,7 +134,7 @@ export function analyze(t: TargetIR): Analysis {
   return { suspW, suspN, warnings };
 }
 
-// ------------------------------------------------------------------ literal helpers
+// ------------------------------------------------------------------ 字面量辅助
 
 function litCode(v: Lit): string {
   if (v === undefined) return 'undefined';
@@ -199,11 +199,11 @@ function str(e: C): string {
   return `String(${e.c})`;
 }
 
-// ------------------------------------------------------------------ idioms
+// ------------------------------------------------------------------ 惯用法
 
 const sameRef = (a: StoreRef, b: StoreRef): boolean => a.scope === b.scope && a.id === b.id && a.list === b.list;
 
-/** Structural equality that ignores block ids. */
+/** 忽略积木 id 的结构相等比较。 */
 function sameExpr(a: Expr | undefined, b: Expr | undefined): boolean {
   if (!a || !b) return a === b;
   if (a.k !== b.k) return false;
@@ -237,9 +237,9 @@ interface SplitIdiom {
 }
 
 /**
- * Matches the project's letter-by-letter split loop at `stmts[i..i+3]`: clear a list, set a word
- * to "", set a counter to "1", then repeat (length of input) times appending each letter that is
- * not the separator to the word and adding the word to the list at each separator.
+ * 匹配 `stmts[i..i+3]` 处项目的逐字母拆分循环：清空列表、将单词设为 ""、
+ * 将计数器设为 "1"，然后重复（输入长度）次，将每个非分隔符字母追加到单词，
+ * 并在每个分隔符处将单词加入列表。
  */
 function splitIdiom(stmts: Stmt[], i: number): SplitIdiom | null {
   const [s0, s1, s2, s3] = stmts.slice(i, i + 4);
@@ -249,7 +249,7 @@ function splitIdiom(stmts: Stmt[], i: number): SplitIdiom | null {
   const word = s1.f.VARIABLE as StoreRef;
   const counter = s2.f.VARIABLE as StoreRef;
   if (sameRef(word, counter) || !isLitValue(s1.in.VALUE, '') || !isLitValue(s2.in.VALUE, '1')) return null;
-  // The input and separator must keep their value while the loop runs.
+  // 循环运行期间，输入和分隔符必须保持其值。
   const steady = (e: Expr | undefined): e is Expr =>
     !!e && (e.k === 'lit' || e.k === 'arg' || (e.k === 'var' && !sameRef(e.ref, word) && !sameRef(e.ref, counter)));
   const times = s3.times;
@@ -273,10 +273,10 @@ function splitIdiom(stmts: Stmt[], i: number): SplitIdiom | null {
   return { list, word, counter, input, sep: test.in.OPERAND2 };
 }
 
-// ------------------------------------------------------------------ generator
+// ------------------------------------------------------------------ 生成器
 
 interface ExprCtx {
-  /** Argument name -> code, or null outside procedures. */
+  /** 参数名称 -> 代码，过程外为 null。 */
   args: Map<string, string> | null;
 }
 
@@ -286,7 +286,7 @@ interface Label {
 }
 
 interface Pct {
-  /** Promise continuation target: a label, or fall off the end of the unit. */
+  /** Promise 续接目标：某个标签，或从单元末尾退出。 */
   label: Label | null;
 }
 
@@ -320,13 +320,13 @@ export class SpriteGen {
   t: TargetIR;
   stage: TargetIR;
   an: Analysis;
-  /** proccode -> resumable unit variable names */
+  /** proccode -> 可恢复单元变量名 */
   unitNames = new Map<string, { N?: string; W?: string }>();
   plainNeeded = new Set<string>();
   out: string[] = [];
   counter = 0;
   errors: string[] = [];
-  /** Property names of this target's lists that no block writes. */
+  /** 此目标列表中没有积木写入的属性名。 */
   fixedLists: string[] = [];
 
   constructor(t: TargetIR, stage: TargetIR, an: Analysis) {
@@ -335,14 +335,14 @@ export class SpriteGen {
     this.an = an;
   }
 
-  // ---------------------------------------------------------------- expressions
+  // ---------------------------------------------------------------- 表达式
 
   ref(r: StoreRef): string {
     const base = r.scope === 'global' ? 'G' : 't';
     return `${base}.${r.list ? 'l' : 'v'}.${r.prop}`;
   }
 
-  /** Sends a cloud variable's new value to the cloud link after a set or change, as the original's data blocks do. */
+  /** 设置或更改云变量后，与原版的数据积木一样将新值发送到云连接。 */
   cloudWrite(r: StoreRef, E: (s: string) => void): void {
     const decl = r.scope === 'global' && !r.list ? this.stage.vars.find((d) => d.id === r.id) : undefined;
     if (decl?.cloud) E(`rt.cloudSet(${JSON.stringify(decl.name)}, ${this.ref(r)});`);
@@ -426,8 +426,8 @@ export class SpriteGen {
       }
       case 'operator_and': case 'operator_or': {
         const [A, B] = bin('OPERAND1', 'OPERAND2');
-        // The compiled code short-circuits both, so its right side runs only when the left does not decide. The
-        // interpreter evaluates both sides, which matters when one draws a random number or tests touching an edge.
+        // 编译代码会对两者短路，因此右侧只在左侧无法决定时求值。
+        // 解释器会求值两侧，当一侧抽取随机数或测试接触边缘时这一点很重要。
         const sym = e.op === 'operator_and' ? '&&' : '||';
         if (COMPILED || (A.pure && B.pure)) {
           if (COMPILED) this.checkOrder(e, ['OPERAND1', 'OPERAND2']);
@@ -507,7 +507,7 @@ export class SpriteGen {
     return r(`unsupported(${JSON.stringify(e.op)})`, 'any');
   }
 
-  /** Records a problem when two impure inputs would evaluate in a different order than the source. */
+  /** 两个非纯输入求值顺序与源码不同时记录问题。 */
   private checkOrder(e: Extract<Expr, { k: 'op' }>, emitted: string[]): void {
     const impure = e.inOrder.filter((k) => exprImpure(e.in[k]));
     if (impure.length < 2) return;
@@ -515,9 +515,9 @@ export class SpriteGen {
     if (emittedImpure.join() !== impure.join()) this.errors.push(`evaluation order differs for ${e.op} ${e.id}`);
   }
 
-  // ---------------------------------------------------------------- simple statements (no suspension)
+  // ---------------------------------------------------------------- 简单语句（不挂起）
 
-  /** Code for a statement list that never suspends, with known idioms replaced by helper calls. */
+  /** 永不挂起的语句列表代码，已知惯用法替换为辅助函数调用。 */
   simpleSeq(stmts: Stmt[], cx: ExprCtx, mode: Mode, stopCode: string, ind: string, out: string[]): void {
     for (let i = 0; i < stmts.length; i++) {
       const split = mode === 'W' ? splitIdiom(stmts, i) : null;
@@ -532,7 +532,7 @@ export class SpriteGen {
     }
   }
 
-  /** Code for a statement that never suspends. `stopCode` is what `stop this script` becomes. */
+  /** 永不挂起的单条语句代码。`stopCode` 是 `stop this script` 转换后的内容。 */
   simple(s: Stmt, cx: ExprCtx, mode: Mode, stopCode: string, ind: string, out: string[]): void {
     const I = (n: string) => (s.k === 'op' ? this.ex(s.in[n], cx) : lit(undefined));
     const E = (code: string) => out.push(`${ind}${code}`);
@@ -556,7 +556,7 @@ export class SpriteGen {
           this.simpleSeq(s.body, cx, mode, stopCode, `${ind}  `, out);
           E('}');
         } else {
-          // The compiled code evaluates the count once, and the interpreter again on every pass.
+          // 编译代码只求值计数一次，解释器每次循环都重新求值。
           E(`for (let ${v} = Math.round(${num(times)}); ${COMPILED ? `${v}-- > 0` : ''}; ) {`);
           if (!COMPILED) E(`  if (!(${v}-- > 0)) break;`);
           this.simpleSeq(s.body, cx, mode, stopCode, `${ind}  `, out);
@@ -772,7 +772,7 @@ export class SpriteGen {
     if (emitted.filter((k) => impure.includes(k)).join() !== impure.join()) this.errors.push(`evaluation order differs for ${s.op} ${s.id}`);
   }
 
-  /** Arguments of a call in parameter order, with source-order checks for impure inputs. */
+  /** 按参数顺序排列的调用参数，并对非纯输入进行源码顺序检查。 */
   callArgs(s: Extract<Stmt, { k: 'call' }>, cx: ExprCtx): { args: string[]; impure: boolean } {
     const proto = this.t.protos.get(s.proc);
     if (!proto) return { args: [], impure: false };
@@ -786,7 +786,7 @@ export class SpriteGen {
       const emitted = proto.ids.filter((id) => impureIds.includes(id));
       if (emitted.join() !== impureIds.join()) this.errors.push(`evaluation order differs for call ${s.proc} ${s.id}`);
     }
-    // Inputs that are not parameters still evaluate in the original.
+    // 不是参数的输入在原版中仍会求值。
     for (const k of s.inOrder) {
       if (!proto.ids.includes(k) && exprImpure(s.args[k])) this.errors.push(`impure input that is not a parameter in call ${s.proc}`);
     }
@@ -805,7 +805,7 @@ export class SpriteGen {
     return `${this.plainName(p)}(${['t', ...args].join(', ')})`;
   }
 
-  /** Key for a variable monitor: the property name, prefixed with the sprite for its own variables. */
+  /** 变量监视器的键：属性名，自己的变量前面加上角色名。 */
   monitorKey(ref: StoreRef): string {
     return ref.scope === 'global' ? ref.prop : `${this.t.name}.${ref.prop}`;
   }
@@ -814,9 +814,9 @@ export class SpriteGen {
     return `p_${p.fname}`;
   }
 
-  // ---------------------------------------------------------------- plain procedures
+  // ---------------------------------------------------------------- 普通过程
 
-  /** Procedure whose body is being generated, for the few blocks generated differently. */
+  /** 正在生成主体的过程，供少数生成方式不同的积木使用。 */
   currentProc: string | null = null;
 
   genPlainProc(p: ProcIR): string {
@@ -830,8 +830,8 @@ export class SpriteGen {
       args.set(n, id);
     });
     const out: string[] = [];
-    // A custom block in NATIVE_PROCS runs the TypeScript version the runtime holds for it, when it holds one, and then
-    // its own blocks only when that version returns false.
+    // NATIVE_PROCS 中的自定义积木会运行运行时持有的 TypeScript 版本（若存在），然后
+    // 只有在那个版本返回 false 时才运行自己的积木。
     if (PROBE) out.push(`    if (rt.probe) rt.probe(${JSON.stringify(p.proccode)}, [${params.join(', ')}]);`);
     if (NATIVE_PROCS.has(p.proccode)) out.push(`    { const nat = rt.natives[${JSON.stringify(`${this.t.name}/${p.proccode}`)}]; if (nat && nat(t, [${params.join(', ')}]) !== false) return; }`);
     this.simpleSeq(p.body, { args }, 'W', 'return;', '    ', out);
@@ -839,9 +839,9 @@ export class SpriteGen {
     return `  /** define ${p.proccode.replace(/\*\//g, '* /')} */\n  function ${this.plainName(p)}(${sig}): void {\n${out.join('\n')}\n  }\n`;
   }
 
-  // ---------------------------------------------------------------- resumable units
+  // ---------------------------------------------------------------- 可恢复单元
 
-  /** Whether a statement list can suspend in the given mode. */
+  /** 语句列表在给定模式下能否挂起。 */
   suspends(stmts: Stmt[], mode: Mode): boolean {
     let found = false;
     walk(stmts, (s) => {
@@ -861,7 +861,7 @@ export class SpriteGen {
     return found;
   }
 
-  /** Statements that need a promise-continuation target. */
+  /** 需要 Promise 续接目标的语句。 */
   needsPct(s: Stmt, mode: Mode): boolean {
     let found = false;
     walk([s], (x) => {
@@ -890,11 +890,11 @@ export class SpriteGen {
     return e[ctx]!;
   }
 
-  /** Mode of the resumable variant of a procedure when entered in `ctx`. */
+  /** 在 `ctx` 中进入时，过程可恢复变体的模式。 */
   unitMode(p: ProcIR, ctx: 'N' | 'W'): Mode {
     if (!p.warp) return ctx === 'N' ? 'N' : 'W';
-    // The compiled code stays in warp mode after a promise block. In the interpreter a warp procedure becomes non-warp
-    // after a promise continuation that lands on its top level when its caller was not in warp mode.
+    // 编译代码在 Promise 积木之后仍保持 warp 模式。在解释器中，warp 过程在
+    // Promise 续接落到其顶层且调用方不在 warp 模式后会变为非 warp。
     if (COMPILED) return 'W';
     const lands = p.body.some((s, i) => i < p.body.length - 1 && this.needsPct(s, 'W'));
     return lands ? 'D' : 'W';
@@ -922,7 +922,7 @@ export class SpriteGen {
     return pct.label ? String(w.ref(pct.label)) : 'PC_FALL_OFF';
   }
 
-  /** `depth` counts the branches around these statements, each of which holds one entry on the original's block stack. */
+  /** `depth` 统计这些语句周围的分支数，每个分支在原版的积木栈上占一项。 */
   private rseq(w: UnitWriter, stmts: Stmt[], mode: Mode, cx: ExprCtx, pctEnd: Pct, bodyLevel: boolean, stopCode: string, depth = 0): void {
     let pendingLabel: Label | null = null;
     for (let i = 0; i < stmts.length; i++) {
@@ -936,7 +936,7 @@ export class SpriteGen {
         const next = w.label();
         pendingLabel = next;
         if (mode === 'D' && bodyLevel) {
-          // Landing at the procedure's top level inherits the caller's warp flag.
+          // 落到过程顶层时会继承调用方的 warp 标志。
           const land = w.label();
           pct = { label: land };
           this.rstmt(w, s, mode, cx, pct, stopCode, depth);
@@ -984,8 +984,8 @@ export class SpriteGen {
         const head = w.label();
         const after = w.label();
         const times = this.ex(s.times, cx);
-        // The compiled code evaluates the count once, before the first pass. The interpreter evaluates it on every
-        // pass and keeps the first value.
+        // 编译代码在第一次循环前只求值计数一次。解释器每次
+        // 循环都重新求值，并保留第一次的值。
         if (COMPILED) {
           w.emit(`f.l[${k}] = Math.round(${num(times)});`);
           w.place(head);
@@ -1024,8 +1024,8 @@ export class SpriteGen {
         const next = w.label();
         const { args, impure } = this.callArgs(s, cx);
         void impure;
-        // The compiled code resumes a custom block that ended in a promise block at the caller's next block, so the
-        // caller's loop still yields at its end. The interpreter continues where the caller's own promise would.
+        // 编译代码会让在 Promise 积木中结束的自定义积木从调用方的下一条积木继续，因此
+        // 调用方循环仍会在末尾 yield。解释器则从调用方自己的 Promise 处继续。
         const pcpCode = COMPILED ? String(w.ref(next)) : this.pctCode(w, pct);
         if (p.warp) {
           const unit = this.unitName(p, 'W');
@@ -1037,7 +1037,7 @@ export class SpriteGen {
           const unit = this.unitName(p, 'W');
           w.emit(`return rt.call(th, f, ${unit}, [${args.join(', ')}], true, ${w.ref(next)}, ${pcpCode}, ${w.ref(next)}, ${depth});`);
         } else {
-          // Dynamic warp: the callee runs in whatever mode this unit is in right now.
+          // 动态 warp：被调用方按此单元当前所处的模式运行。
           const plainOk = !this.an.suspW.get(p.proccode);
           const unitN = this.an.suspN.get(p.proccode) ? this.unitName(p, 'N') : null;
           const wPart = plainOk
@@ -1062,13 +1062,13 @@ export class SpriteGen {
         w.emit(`f.l[${k}] = rt.currentMSecs; f.l[${k + 1}] = Math.max(0, 1000 * ${num(dur)});`);
         w.emit(`rt.requestRedraw(); f.pc = ${w.ref(chk)}; return Ctl.Yield;`);
         w.place(chk);
-        // The interpreter evaluates the duration again on every step, and the compiled code once.
+        // 解释器每一步都会重新求值持续时间，编译代码只求值一次。
         if (!COMPILED && !dur.pure) w.emit(`${dur.c};`);
         w.emit(`if (rt.currentMSecs - f.l[${k}]! < f.l[${k + 1}]!) return Ctl.Yield;`);
         return;
       }
       case 'event_broadcastandwait': {
-        // The first step evaluates the message and starts the hats; later steps only check.
+        // 第一步求值消息并启动帽子；后续步骤只检查。
         const chk = w.label();
         const after = w.label();
         const msg = I('BROADCAST_INPUT');
@@ -1121,7 +1121,7 @@ export class SpriteGen {
     this.errors.push(`unsupported suspending statement ${s.op}`);
   }
 
-  // ---------------------------------------------------------------- module
+  // ---------------------------------------------------------------- 模块
 
   generate(): string {
     const t = this.t;
@@ -1144,7 +1144,7 @@ export class SpriteGen {
       }
     });
 
-    // Resumable procedure variants requested so far may request more; iterate until stable.
+    // 目前请求的可恢复过程变体可能继续请求更多；迭代到稳定为止。
     const doneUnits = new Set<string>();
     for (let progress = true; progress; ) {
       progress = false;
@@ -1161,7 +1161,7 @@ export class SpriteGen {
         }
       }
     }
-    // Plain procedures, including ones only reachable from other plain procedures.
+    // 普通过程，包括只能从其他普通过程到达的过程。
     const donePlain = new Set<string>();
     for (let progress = true; progress; ) {
       progress = false;

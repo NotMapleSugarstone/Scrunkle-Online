@@ -1,11 +1,11 @@
-// Renders the site's favicon, touch icon and link preview image from the game's costumes.
-// Usage: npx tsx tools/site-images.ts "<sprite>" "<costume>" [x,y,size] [--art "<sprite>" "<costume>"] [--clear-shadow]
+// 从游戏造型渲染站点图标、触摸图标和链接预览图。
+// 用法：npx tsx tools/site-images.ts "<sprite>" "<costume>" [x,y,size] [--art "<sprite>" "<costume>"] [--clear-shadow]
 //          [--icon "<sprite>" "<costume>"]
-// The icon shows the square at x,y (top-left, in the costume's own pixels) of the given size, or the whole costume, on a
-// white rounded square. With --icon it shows that costume's visible pixels instead, on a transparent background.
-// The preview shows the whole costume centered on white, or with --art over that costume filling the image under a
-// dark vignette. --clear-shadow makes the costume's translucent pure black pixels transparent, which removes a shadow
-// painted into it.
+// 图标显示造型自身像素坐标 x,y（左上角）处给定大小的正方形，或整个造型，置于
+// 白色圆角方块上。使用 --icon 时改为显示该造型的可见像素，背景透明。
+// 预览图将整个造型居中放在白底上；使用 --art 时则用该造型填充深色晕影
+// 下的图像。--clear-shadow 会将造型中半透明的纯黑像素变为透明，从而去除
+// 绘制在其中的阴影。
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright-core';
@@ -15,7 +15,7 @@ import { modules } from '../src/game/generated/index.ts';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(ROOT, 'public');
 const args = process.argv.slice(2);
-/** Removes `--name` and the `count` values after it from the arguments, and returns those values. */
+/** 从参数中移除 `--name` 及其后的 `count` 个值，并返回这些值。 */
 function option(name: string, count: number): string[] | null {
   const at = args.indexOf(name);
   return at >= 0 ? args.splice(at, count + 1).slice(1) : null;
@@ -32,11 +32,11 @@ interface Picture {
   src: string;
   w: number;
   h: number;
-  /** The visible pixels, in the picture's own pixels. */
+  /** 图片自身像素中的可见像素。 */
   box: { x: number; y: number; w: number; h: number };
 }
 
-/** A costume as a data URL with its size in image pixels, with shared fonts put back into vector images. */
+/** 造型的 data URL 及图像像素尺寸，共享字体会放回矢量图像。 */
 function costume(spriteName: string, name: string): Picture {
   const ti = modules.findIndex((m) => m.def.name === spriteName);
   const c = allCostumes[ti]?.find((x) => x.name === name);
@@ -52,7 +52,7 @@ function costume(spriteName: string, name: string): Picture {
   return { src: `data:image/png;base64,${png.toString('base64')}`, w, h, box: { x: 0, y: 0, w, h } };
 }
 
-/** Finds a picture's visible pixels in the page, first clearing its translucent pure black pixels with `clear`. */
+/** 在页面中查找图片的可见像素，先用 `clear` 清除半透明纯黑像素。 */
 async function measure(tab: Page, pic: Picture, clear: boolean): Promise<void> {
   const r = await tab.evaluate(
     async ({ src, w, h, clear }) => {
@@ -93,7 +93,7 @@ function page(w: number, h: number, body: string): string {
   return `<!doctype html><html><body style="margin:0;background:transparent"><div style="position:relative;width:${w}px;height:${h}px;overflow:hidden">${body}</div></body></html>`;
 }
 
-/** A picture scaled by `scale` with the center of its visible pixels at (x, y). */
+/** 按 `scale` 缩放图片，使其可见像素中心位于 (x, y)。 */
 function centered(pic: Picture, x: number, y: number, scale: number): string {
   const left = x - (pic.box.x + pic.box.w / 2) * scale;
   const top = y - (pic.box.y + pic.box.h / 2) * scale;
@@ -102,7 +102,7 @@ function centered(pic: Picture, x: number, y: number, scale: number): string {
 
 function icon(size: number): string {
   if (iconPic) return page(size, size, centered(iconPic, size / 2, size / 2, (size * 0.96) / Math.max(iconPic.box.w, iconPic.box.h)));
-  // The crop on a white rounded square, so dark outlines show on dark tab bars.
+  // 裁剪到白色圆角方块上，使深色轮廓在深色标签栏中也可见。
   const inner = size * 0.9;
   const s = inner / cs;
   const pad = (size - inner) / 2;

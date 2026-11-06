@@ -1,6 +1,6 @@
-// The player's save, kept in this browser between visits: the stage lists and variables in src/game/saves.ts.
-// Offline play loads it before the first frame and writes it back while the game runs. Online games run from the
-// project's own data on every machine, so all of them start the same, and they never write a save.
+// 玩家的存档，保存在此浏览器中供下次访问使用：舞台列表和变量见 src/game/saves.ts。
+// 离线游玩在第一帧前加载，并在游戏运行时写回。在线游戏在每台机器上都从
+// 项目自身数据开始，因此所有人初始状态相同，也从不写入存档。
 import type { Value } from '../engine/cast.ts';
 import type { Runtime } from '../engine/runtime.ts';
 import { SAVE_LISTS, SAVE_VARS, shownCode } from '../game/saves.ts';
@@ -8,7 +8,7 @@ import { STORAGE_PREFIX } from '../game/page.ts';
 import { downloadFile, fileName } from './download.ts';
 
 const KEY = `${STORAGE_PREFIX}.save`;
-/** How often a running game's save is written, at most. */
+/** 运行中游戏存档的最长写入间隔。 */
 const WRITE_EVERY_MS = 2000;
 
 interface SaveFile {
@@ -17,7 +17,7 @@ interface SaveFile {
   vars: Record<string, Value>;
 }
 
-/** Only strings, numbers and booleans go into lists and variables. */
+/** 列表和变量只保存字符串、数字和布尔值。 */
 const isValue = (v: unknown): v is Value => typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean';
 
 function read(): SaveFile | null {
@@ -45,7 +45,7 @@ function capture(rt: Runtime): SaveFile {
   return { format: 1, lists, vars };
 }
 
-/** Puts this browser's save into a runtime that has not run a frame yet. Values of the wrong kind are skipped. */
+/** 将浏览器存档载入尚未运行任何帧的运行时。类型错误的值会被跳过。 */
 export function loadSave(rt: Runtime): void {
   const save = read();
   if (!save) return;
@@ -63,8 +63,8 @@ export function loadSave(rt: Runtime): void {
 }
 
 /**
- * Downloads each new code the game shows for copying (`shownCode` in src/game/saves.ts) as a text file, and calls
- * `onSaved` with its name. Returns the check to run after each drawn frame.
+ * 将游戏显示的可复制代码（src/game/saves.ts 中的 `shownCode`）逐个下载为文本文件，
+ * 并以文件名调用 `onSaved`。返回每个绘制帧后要运行的检查。
  */
 export function codeFiles(onSaved: (name: string) => void): (rt: Runtime) => void {
   let last = '';
@@ -79,8 +79,8 @@ export function codeFiles(onSaved: (name: string) => void): (rt: Runtime) => voi
 }
 
 /**
- * Keeps writing a running game's save: at most every two seconds while it changes, and when the page is hidden or
- * closed. Returns a function that writes once more and stops.
+ * 持续写入运行中游戏的存档：变化时最多每两秒一次，以及页面隐藏或关闭时。
+ * 返回再写入一次并停止的函数。
  */
 export function keepSaving(game: () => Runtime): () => void {
   let last = JSON.stringify(capture(game()));
@@ -91,7 +91,7 @@ export function keepSaving(game: () => Runtime): () => void {
     try {
       localStorage.setItem(KEY, text);
     } catch {
-      // Storage may be blocked or full.
+      // 存储可能被阻止或已满。
     }
   };
   const timer = setInterval(flush, WRITE_EVERY_MS);

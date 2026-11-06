@@ -31,11 +31,11 @@ const canvas = document.getElementById('stage') as HTMLCanvasElement;
 const overlay = document.getElementById('overlay')!;
 const page = document.getElementById('app')!;
 
-/** Set once the touch controls exist; they call `fitStage` while being built. */
+/** 触屏控制创建后设置；构建期间它们会调用 `fitStage`。 */
 let touchUi: TouchControls | null = null;
 
 function fitStage(): void {
-  // In portrait the touch controls take the bottom of the screen and the stage sits above them.
+  // 竖屏时触屏控制占屏幕底部，舞台位于其上方。
   const portraitTouch = !!touchUi?.active && window.innerHeight > window.innerWidth;
   const touchMin = portraitTouch ? 220 : 0;
   document.documentElement.classList.toggle('touch-portrait', portraitTouch);
@@ -62,10 +62,10 @@ function fitStage(): void {
   canvas.height = Math.round(cssH * dpr);
 }
 
-/** The canvas size while a replay records as a video, which the window's size does not change. */
+/** 回放录制为视频时的画布尺寸，不随窗口大小改变。 */
 let videoSize: [number, number] | null = null;
 
-/** Local time expressed in UTC fields, so the date blocks read the player's wall clock. */
+/** 用 UTC 字段表示的本地时间，使日期积木读取玩家的墙上时钟。 */
 function localT0(): number {
   const now = Date.now();
   return now - new Date(now).getTimezoneOffset() * 60_000;
@@ -74,8 +74,8 @@ function localT0(): number {
 fitStage();
 window.addEventListener('resize', fitStage);
 
-// One game object per page: assets load once while the lobby shows. The runtime is replaced when an online game
-// starts with the shared seed, when a replay plays, and when a player leaves for the start screen.
+// 每页只有一个游戏对象：大厅显示期间素材只加载一次。在线游戏以共享种子开始时、
+// 播放回放时，以及玩家返回开始界面时，会替换运行时。
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
 const game = new Game(canvas, overlay, { seed: randomSeed(), t0: localT0() });
 const input = new LocalInput(stageWrap);
@@ -94,12 +94,12 @@ touchUi = touch;
 const toast = new Toast(stageWrap);
 const offer = new ReplayOffer(stageWrap, toast);
 
-/** Stops whatever runs in place of the start screen: offline play, an online game or a replay. */
+/** 停止代替开始界面运行的内容：离线游玩、在线游戏或回放。 */
 let stopPlaying: (() => void) | null = null;
 
 /**
- * Goes back to the start screen on a fresh runtime. The images and sounds stay loaded, so this takes no reload.
- * A question about saving a replay stays up, over the start screen.
+ * 在全新运行时上返回开始界面。图像和声音保持加载，因此无需刷新页面。
+ * 保存回放的问题会继续显示在开始界面之上。
  */
 function backToStart(view: 'menu' | 'replays' = 'menu'): void {
   stopPlaying?.();
@@ -113,7 +113,7 @@ function backToStart(view: 'menu' | 'replays' = 'menu'): void {
   lobby.showStart(view);
 }
 
-/** The bar under the stage in offline play, with the way back to the start screen. */
+/** 离线游玩时舞台下方的状态栏，包含返回开始界面的按钮。 */
 function leaveBar(): HTMLElement {
   const bar = document.createElement('div');
   bar.className = 'hud';
@@ -129,7 +129,7 @@ function leaveBar(): HTMLElement {
   return bar;
 }
 
-/** Records each match and asks after it whether to save a replay. */
+/** 记录每场比赛，并在结束后询问是否保存回放。 */
 function recorder(t0: number, online: boolean, names: string[]): ReplayRecorder {
   const r = new ReplayRecorder(game.rt, t0, { build: BUILD, online, names });
   r.onStart = () => offer.clear();
@@ -137,10 +137,10 @@ function recorder(t0: number, online: boolean, names: string[]): ReplayRecorder 
   return r;
 }
 
-/** The local player's input for one frame: keys, touch and controllers, the mouse, and an answer to a question. */
+/** 本地玩家一帧的输入：键盘、触屏、控制器、鼠标以及对问题的回答。 */
 function sampleLocal(): PlayerInput {
   const keys = new Set(input.sampleKeys());
-  // Touch and controller slot n press the keys of player n+1.
+  // 触屏和控制器槽位 n 会按下玩家 n+1 的按键。
   pads.sample().forEach((acts, slot) => {
     for (const k of actionKeys(acts, seatKeys(game.rt, slot))) keys.add(k);
   });
@@ -157,7 +157,7 @@ function sampleLocal(): PlayerInput {
 let room: RoomClient | null = null;
 let mesh: Mesh | null = null;
 let online: OnlineGame | null = null;
-// Closing the page says goodbye, so the other player goes on without this one instead of waiting.
+// 关闭页面时发送告别消息，让其他玩家继续而不再等待。
 window.addEventListener('pagehide', () => online?.leave());
 let seats: SeatInfo[] = [];
 let host = 0;
@@ -184,7 +184,7 @@ const lobby = new Lobby(overlay, {
     game.startPrefetch();
     lobby.hide();
     input.enabled = true;
-    // The browser's save goes in first, and keys set under Controls replace Player 1's saved keys.
+    // 先加载浏览器中的存档，控制设置中的按键会覆盖玩家 1 的已保存按键。
     loadSave(game.rt);
     applyCutsceneDefault(game.rt);
     const own = savedControls();
@@ -291,7 +291,7 @@ function setWearHats(on: boolean): void {
   game.present();
 }
 setWearHats(loadWearHats());
-// F2 works on every screen, so the capture phase sees it before the lobby keeps keys to itself.
+// F2 在所有界面都有效，因此捕获阶段会先于大厅的按键处理看到它。
 window.addEventListener(
   'keydown',
   (e) => {
@@ -301,7 +301,7 @@ window.addEventListener(
   },
   true,
 );
-// Menus act on one direction at a time; character select and matches take free movement.
+// 菜单一次只响应一个方向；角色选择和比赛使用自由移动。
 touch.menuMode = () => !seatScreen(game.rt);
 lobby.setTouch(touch.enabled);
 lobby.setOnline(onlineAvailable());
@@ -315,7 +315,7 @@ function connect(roomId: string, name: string): void {
   const client = new RoomClient(roomId, name);
   room = client;
   room.onStatus = (s, why) => {
-    // A refused player's socket closes right after the reason arrives, which stays on screen.
+    // 被拒绝玩家的套接字会在原因到达后立即关闭，原因会留在屏幕上。
     if (client.refusal) return;
     if (s !== 'open') report('room-socket', { status: s, why, inGame: online !== null, ...(online?.diagnostics() ?? {}) });
     if (s === 'reconnecting') lobby.setNetStatus('connectionLost');
@@ -325,8 +325,8 @@ function connect(roomId: string, name: string): void {
   room.onMessage = (m) => {
     switch (m.type) {
       case 'welcome':
-        // A welcome also arrives after the room socket reconnects. The running game keeps its
-        // links, so the mesh is only replaced when this player's seat changed.
+        // 房间套接字重连后也会收到 welcome。正在运行的游戏保留其
+        // 连接，因此只有此玩家的座位变化时才替换 mesh。
         if (!mesh || mesh.local !== m.seat) {
           mesh?.close();
           mesh = new Mesh(room!, m.seat);
@@ -358,7 +358,7 @@ function connect(roomId: string, name: string): void {
         begin(m.start);
         break;
       case 'refused':
-        // A room refused to its own host has nobody in it, so its code is withdrawn.
+        // 房间拒绝自己的房主时房间内无人，因此撤回房间代码。
         if (hosting && code) void cancelRoom(code);
         lobby.setNetReason(m.reason);
         lobby.showMenu();
@@ -379,7 +379,7 @@ function begin(start: StartInfo): void {
   const names = new Map(seats.map((s) => [s.seat, s.name]));
   const hud = new Hud(page, () => backToStart(), overlay);
   stopPlaying = () => {
-    // Leaving says goodbye to the others and closes the room and the direct links.
+    // 离开时会向其他人告别，并关闭房间和直连。
     online?.leave();
     hud.remove();
     online = null;
@@ -389,7 +389,7 @@ function begin(start: StartInfo): void {
   };
   online = new OnlineGame(game, room, mesh, start, room.seat, names, hud, host);
   (window as unknown as { __online: OnlineGame }).__online = online;
-  // Online, a frame is recorded once every player's input for it is confirmed.
+  // 在线时，只有在每位玩家该帧的输入确认后才记录该帧。
   const replay = recorder(start.t0, true, start.seats.map((s) => names.get(s) ?? `P${s + 1}`));
   online.session.onConfirmed = (_frame, inputs, after) => replay.frame(inputs, snapshotState(game.rt, after));
   lobby.hide();
@@ -402,7 +402,7 @@ function begin(start: StartInfo): void {
 window.addEventListener('error', (e) => report('error', { message: e.message, at: `${e.filename}:${e.lineno}:${e.colno}`, stack: e.error?.stack, ...(online?.diagnostics() ?? {}) }));
 window.addEventListener('unhandledrejection', (e) => report('error', { message: String(e.reason?.message ?? e.reason), stack: e.reason?.stack, ...(online?.diagnostics() ?? {}) }));
 
-/** Plays a saved replay in place of the start screen, or records it as a video. */
+/** 代替开始界面播放已保存的回放，或将其录制为视频。 */
 async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
   if (quality && !videoType()) {
     lobby.setStatus(currentText('cannotRecord'));
@@ -434,7 +434,7 @@ async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
   stopPlaying = runReplayViewer({ game, meta, body, warning, page, stage: stageWrap, video, onExit: () => backToStart('replays') });
 }
 
-// Every image and sound loads and decodes behind the lobby before the play buttons enable.
+// 每张图像和每个声音都在大厅后台加载并解码，完成后游玩按钮才启用。
 lobby.setLoading(true, currentText('loading'));
 void game
   .load(() => {})

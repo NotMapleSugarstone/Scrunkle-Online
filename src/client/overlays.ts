@@ -1,10 +1,10 @@
-// HTML overlays the game needs on top of the canvas: the question box, monitors and speech bubbles.
+// 游戏在画布上需要的 HTML 覆盖层：问题框、监视器和对话气泡。
 import type { PauseRule, Runtime } from '../engine/runtime.ts';
 import { STAGE_H, STAGE_W, STAGE_X, STAGE_Y, type Monitors } from '../engine/defs.ts';
 import type { Value } from '../engine/cast.ts';
 import { createElement, FileUp } from 'lucide';
 
-/** The largest text file the question box takes as an answer. */
+/** 问题框接受为答案的最大文本文件大小。 */
 const ANSWER_FILE_MAX = 1_000_000;
 
 export class QuestionBox {
@@ -13,7 +13,7 @@ export class QuestionBox {
   private input: HTMLInputElement;
   private fileBtn: HTMLButtonElement;
   private shownFor: unknown = null;
-  /** Text submitted since the last frame, taken by the next simulation input. */
+  /** 自上一帧以来提交的文本，由下一次模拟输入取走。 */
   pendingAnswer: string | undefined;
   onFocusChange?: (focused: boolean) => void;
 
@@ -29,7 +29,7 @@ export class QuestionBox {
     const ok = document.createElement('button');
     ok.textContent = '✔';
     ok.setAttribute('aria-label', 'Submit answer');
-    // A text file's contents as the answer, for a game whose questions ask for codes.
+    // 文本文件内容作为答案，用于要求输入代码的问题。
     this.fileBtn = document.createElement('button');
     this.fileBtn.title = 'Open a .txt file';
     this.fileBtn.setAttribute('aria-label', 'Open a .txt file');
@@ -65,7 +65,7 @@ export class QuestionBox {
     this.input.addEventListener('blur', () => this.onFocusChange?.(false));
   }
 
-  /** Shows the button that answers with a text file's contents. */
+  /** 显示用文本文件内容作答的按钮。 */
   set allowFiles(on: boolean) {
     this.fileBtn.hidden = !on;
   }
@@ -146,12 +146,12 @@ export class ListMonitors {
   }
 }
 
-/** Monitor text for a value: numbers show at most six decimal places, as in the original editor. */
+/** 监视器文字：数字最多显示六位小数，与原编辑器一致。 */
 function monitorText(v: Value): string {
   return typeof v === 'number' ? String(Number(v.toFixed(6))) : String(v);
 }
 
-/** Stage variable monitors in the default (label and value) and large (value only) styles. */
+/** 默认（标签和值）与大号（仅值）样式的舞台变量监视器。 */
 export class VarMonitors {
   private els = new Map<string, { root: HTMLDivElement; value: HTMLSpanElement; last: string }>();
 
@@ -193,7 +193,7 @@ export class VarMonitors {
   }
 }
 
-/** The pause menu over the stage while the simulation is paused. Its buttons press the pause rule's keys. */
+/** 模拟暂停时覆盖舞台的暂停菜单。其按钮会按下暂停规则中的键。 */
 export class PauseMenu {
   private el: HTMLDivElement;
   onKey: (key: string) => void = () => {};
@@ -224,8 +224,8 @@ export class PauseMenu {
 }
 
 /**
- * Speech bubbles from `say`, placed as the original places them: beside the top of the sprite, on its right
- * unless that would leave the stage, and kept inside the stage.
+ * `say` 产生的对话气泡，按原版方式放置：位于角色顶部旁，默认在右侧，
+ * 若会超出舞台则放到左侧，并始终保持在舞台内。
  */
 export class Bubbles {
   private els = new Map<number, { el: HTMLDivElement; right: boolean }>();
@@ -248,7 +248,7 @@ export class Bubbles {
         this.els.set(t.id, m);
       }
       if (m.el.textContent !== text) m.el.textContent = text;
-      // Bubble size in stage units. The costume box is pure geometry; the hull bounds would change simulation state.
+      // 气泡大小以舞台单位计。造型框只是几何数据；外壳边界会改变模拟状态。
       const unit = STAGE_W / stageW;
       const w = m.el.offsetWidth * unit;
       const h = m.el.offsetHeight * unit;

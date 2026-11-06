@@ -1,5 +1,5 @@
-// Assembles pseudocode in the decompiler's syntax into blocks of one target, so hand merges read like the scripts they edit.
-// Input shapes (literal type codes and shadow menus) are learned from the blocks of the projects passed to learnShapes.
+// 将反编译器语法中的伪代码汇编为目标积木，使手工合并读起来像它所编辑的脚本。
+// 输入形状（字面量类型代码和 shadow 菜单）从传给 learnShapes 的项目积木中学习。
 const { isBlock } = require('./sb3.cjs');
 
 const shapes = new Map(); // "opcode.INPUT" -> {prim: typecode} | {shadow: opcode, field} | {bool: true}
@@ -22,7 +22,7 @@ function learnShapes(...projects) {
   }
 }
 
-// ---------------------------------------------------------------- tokens
+// ---------------------------------------------------------------- 令牌
 
 function tokenize(src) {
   const toks = [];
@@ -32,7 +32,7 @@ function tokenize(src) {
     if (c === '\n') { toks.push({ t: 'nl' }); i++; continue; }
     if (/\s/.test(c)) { i++; continue; }
     if (c === '"') {
-      // `raw` keeps the text as printed, for procedure names, which the decompiler prints without escaping.
+      // `raw` 保留打印时的文本，用于过程名，反编译器打印时不转义。
       let j = i + 1, s = '';
       while (src[j] !== '"') {
         if (src[j] === '\\' && (src[j + 1] === '"' || src[j + 1] === '\\' || src[j + 1] === 'n')) { s += JSON.parse(`"${src[j]}${src[j + 1]}"`); j += 2; } else s += src[j++];
@@ -55,7 +55,7 @@ function tokenize(src) {
     while (j < src.length && /[A-Za-z0-9_.]/.test(src[j])) j++;
     if (j === i) throw new Error(`asm: bad character ${c} in ${src.slice(i, i + 30)}`);
     const word = src.slice(i, j);
-    // Argument names can hold any character, so arg(...) takes everything up to its closing parenthesis.
+    // 参数名可包含任意字符，因此 arg(...) 会取到其右括号前的全部内容。
     if ((word === 'arg' || word === 'argb') && src[j] === '(') {
       const k = src.indexOf(')', j);
       toks.push({ t: 'id', v: word }, { t: '(' }, { t: 'argname', v: src.slice(j + 1, k) }, { t: ')' });
@@ -67,7 +67,7 @@ function tokenize(src) {
   return toks;
 }
 
-// ---------------------------------------------------------------- assembler
+// ---------------------------------------------------------------- 汇编器
 
 class Asm {
   constructor(project, target, ids) {
@@ -75,7 +75,7 @@ class Asm {
     this.stage = project.targets.find(x => x.isStage);
   }
 
-  // Variable, list or broadcast id by name, a target's locals before the Stage's globals.
+  // 按名称查找变量、列表或广播 id，目标局部量优先于舞台全局量。
   ref(kind, name) {
     if (kind === 'broadcast') {
       const e = Object.entries(this.stage.broadcasts).find(([, n]) => n === name);
@@ -91,7 +91,7 @@ class Asm {
 
   link(parent, child) { if (child && isBlock(this.t.blocks[child])) this.t.blocks[child].parent = parent; }
 
-  // Builds the input entry for a value placed in slot opcode.name.
+  // 为放入槽 opcode.name 的值构建输入项。
   input(owner, opcode, name, val) {
     if (val.kind === 'null') return null;
     const shape = shapes.get(`${opcode}.${name}`) || { prim: 10 };
@@ -104,7 +104,7 @@ class Asm {
       this.link(owner, val.id);
       return [3, val.id, sh];
     }
-    // A menu printed as a generic call (sensing_distancetomenu(DISTANCETOMENU:"P1")) is the slot's own shadow.
+    // 打印为通用调用的菜单（sensing_distancetomenu(DISTANCETOMENU:"P1")）就是该槽自己的 shadow。
     if (val.kind === 'block' && this.t.blocks[val.id].opcode === shape.shadow) {
       Object.assign(this.t.blocks[val.id], { shadow: true, parent: owner });
       return [1, val.id];
@@ -118,7 +118,7 @@ class Asm {
   }
   defaultField(shape) { return shape.shadow === 'looks_costume' ? 'costume1' : ''; }
 
-  // ------------------------------------------------ expressions
+  // ------------------------------------------------ 表达式
   expr() {
     const k = this.peek();
     if (k.t === 'str') { this.i++; return { kind: 'lit', v: k.v }; }
@@ -184,14 +184,14 @@ class Asm {
     return { kind: 'block', id };
   }
 
-  // ------------------------------------------------ statements
+  // ------------------------------------------------ 语句
   peek() { return this.toks[this.i]; }
   next() { return this.toks[this.i++]; }
   expect(t) { const k = this.next(); if (k.t !== t && k.v !== t) throw new Error(`asm: expected ${t}, got ${JSON.stringify(k)}`); return k; }
   skipNl() { while (this.peek().t === 'nl') this.i++; }
   atWord(...w) { const k = this.peek(); return k.t === 'id' && w.includes(k.v); }
 
-  // Parses statements until one of the stop words; returns the first block id of the chain (or null).
+  // 解析语句直到某个停止词；返回链的第一个积木 id（或 null）。
   chain(stops) {
     let first = null, prev = null;
     for (;;) {
@@ -313,7 +313,7 @@ class Asm {
     return this.generic(w).id;
   }
 
-  // Generic opcode(NAME=expr, FIELD:"value"), with the opening parenthesis already read.
+  // 通用 opcode(NAME=expr, FIELD:"value")，开括号已读取。
   generic(opcode) {
     const id = this.add({ opcode });
     while (this.peek().t !== ')') {
@@ -329,7 +329,7 @@ class Asm {
     return { kind: 'block', id };
   }
 
-  // Returns the first block of the assembled chain, unlinked.
+  // 返回已汇编链的第一个积木，未连接。
   run(src) {
     this.toks = tokenize(src);
     this.i = 0;

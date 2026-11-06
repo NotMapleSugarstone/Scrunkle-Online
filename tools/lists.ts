@@ -1,10 +1,10 @@
-// Edits the game's list data outside the original editor, in data/lists (see tools/lib/lists.ts).
-// Usage:
-//   npx tsx tools/lists.ts export <list> [<list>...]   copy lists from the project into data/lists for editing
-//                                                       (a sprite's own list is "<sprite>/<list>")
-//   npx tsx tools/lists.ts status                       compare each edited list with the project
-//   npx tsx tools/lists.ts pack                         write out/patched.sb3, the project with the edited lists
-// The transpiler applies data/lists, and the reference runner loads out/patched.sb3 whenever data/lists has files.
+// 在原编辑器之外编辑游戏列表数据，文件位于 data/lists（见 tools/lib/lists.ts）。
+// 用法：
+//   npx tsx tools/lists.ts export <list> [<list>...]   将项目中的列表复制到 data/lists 以便编辑
+//                                                       （角色自己的列表写作 "<sprite>/<list>"）
+//   npx tsx tools/lists.ts status                       将每个已编辑列表与项目比较
+//   npx tsx tools/lists.ts pack                         写出 out/patched.sb3，即包含已编辑列表的项目
+// 转译器会应用 data/lists，参考运行器在 data/lists 有文件时加载 out/patched.sb3。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileNameFor, formatList, LIST_DIR, parseList, readOverrides, ROOT, writePatchedProject } from './lib/lists.ts';

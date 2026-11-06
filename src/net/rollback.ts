@@ -1,7 +1,7 @@
-// Rollback session: every player runs the whole simulation. Local input is applied after a
-// small delay; missing remote input is predicted by repeating the player's last known keys.
-// When real input arrives and differs from the prediction, the session restores the snapshot
-// before that frame and simulates forward again with the corrected input.
+// 回滚会话：每位玩家都运行完整模拟。本地输入经过
+// 短暂延迟后应用；缺失的远程输入通过重复该玩家最后已知的按键来预测。
+// 真实输入到达且与预测不同时，会话恢复该帧之前的快照，
+// 并用修正后的输入继续向前模拟。
 import type { PlayerInput } from '../engine/io.ts';
 import { FRAME_MS, type Runtime } from '../engine/runtime.ts';
 import type { SoundEvent } from '../engine/sound-model.ts';
@@ -9,7 +9,7 @@ import { saveSnapshot, loadSnapshot, type Snapshot } from '../engine/snapshot.ts
 import { asSent, decodePacket, encodePacket, Kind, type InputPacket, type Packet } from './wire.ts';
 
 export interface Transport {
-  /** Sends a packet to one seat; delivery is unreliable and unordered. */
+  /** 向一个座位发送数据包；投递不可靠且无序。 */
   send(seat: number, data: ArrayBuffer): void;
 }
 
@@ -18,7 +18,7 @@ export interface SessionOptions {
   local: number;
   seats: number[];
   delay: number;
-  /** Most frames the simulation may run ahead of the oldest unconfirmed remote input. */
+  /** 模拟最多可领先最旧的未确认远程输入多少帧。 */
   maxPrediction?: number;
   transport: Transport;
   now?: () => number;
@@ -32,7 +32,7 @@ export interface SessionStats {
   pings: Record<number, number>;
   advantage: number;
   waitingFor: number[];
-  /** Milliseconds since each remote seat was last heard from. */
+  /** 距离上次收到各远程座位消息的毫秒数。 */
   silentFor: Record<number, number>;
   desync: { frame: number; seat: number } | null;
 }
@@ -53,10 +53,10 @@ function sameInput(a: PlayerInput | undefined, b: PlayerInput | undefined): bool
 
 const EMPTY: PlayerInput = { keys: [] };
 
-/** A stable hash of a snapshot's simulation state. */
+/** 快照模拟状态的稳定哈希。 */
 export function snapshotHash(s: Snapshot): number {
-  // The pen array is shared and may have grown since; its length at snapshot time is what counts. Held keys come from
-  // inputs every peer already agrees on, and leaving them out keeps hashes from before snapshots held them.
+  // 画笔数组是共享的，之后可能增长；以快照时的长度为准。按住的键来自
+  // 所有对端已达成一致的输入，将它们排除可让快照之前的哈希保持不变。
   const text = JSON.stringify({ ...s, penCmds: s.penLength, keys: undefined });
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
@@ -75,16 +75,16 @@ export class RollbackSession {
   private transport: Transport;
   private now: () => number;
 
-  /** Last simulated frame; the runtime holds the state after it. */
+  /** 最后模拟的帧；运行时持有该帧之后的状态。 */
   frame = 0;
   private snaps = new Map<number, Snapshot>();
-  /** Confirmed inputs per seat by frame. */
+  /** 各座位按帧确认的输入。 */
   private inputs = new Map<number, Map<number, PlayerInput>>();
-  /** Highest frame per seat with no gaps in its confirmed inputs. */
+  /** 各座位确认输入无缺口的最高的帧。 */
   private lastConf = new Map<number, number>();
-  /** Inputs used when each frame was last simulated. */
+  /** 上次模拟各帧时使用的输入。 */
   private used = new Map<number, PlayerInput[]>();
-  /** Highest frame of our inputs each peer holds. */
+  /** 每个对端持有的本端输入的最高帧。 */
   private peerAck = new Map<number, number>();
   private peerFrame = new Map<number, number>();
   private peerHeard = new Map<number, number>();
@@ -95,14 +95,14 @@ export class RollbackSession {
   private myHashes = new Map<number, number>();
   private theirHashes = new Map<string, number>();
   private checkOut = { frame: 0, hash: 0 };
-  /** Sound events per frame from the latest simulation of that frame. */
+  /** 该帧最近一次模拟产生的逐帧声音事件。 */
   readonly soundByFrame = new Map<number, SoundEvent[]>();
   stats: SessionStats = { frame: 0, rollbacks: 0, rolledFrames: 0, stalls: 0, pings: {}, advantage: 0, waitingFor: [], silentFor: {}, desync: null };
-  /** Called after each frame is simulated, with whether it was a re-simulation. */
+  /** 每帧模拟后调用，并告知是否为重新模拟。 */
   onFrame: ((frame: number, resim: boolean, sounds: SoundEvent[]) => void) | null = null;
-  /** A player said they are leaving the game. */
+  /** 一位玩家表示要离开游戏。 */
   onBye: ((seat: number) => void) | null = null;
-  /** Called once per frame, in order, when every seat's input for it is confirmed, with the four slots' inputs and the state after it. */
+  /** 当每个座位该帧的输入都已确认时，按顺序每帧调用一次，传入四个槽位的输入和该帧后的状态。 */
   onConfirmed: ((frame: number, inputs: PlayerInput[], after: Snapshot) => void) | null = null;
   private reported = 0;
 
@@ -117,7 +117,7 @@ export class RollbackSession {
     this.rt.io.netMode = true;
     for (const s of this.seats) {
       const m = new Map<number, PlayerInput>();
-      // The first `delay` frames have no one's input yet.
+      // 最初的 `delay` 帧还没有任何人的输入。
       for (let f = 1; f <= this.delay; f++) m.set(f, EMPTY);
       this.inputs.set(s, m);
       this.lastConf.set(s, this.delay);
@@ -128,7 +128,7 @@ export class RollbackSession {
     this.snaps.set(0, saveSnapshot(this.rt));
   }
 
-  /** Seats that left, with the last frame their real input counts for; after it their input is empty. */
+  /** 已离开的座位，以及其真实输入计到哪一帧；之后其输入为空。 */
   private dropped = new Map<number, number>();
 
   private get remotes(): number[] {
@@ -162,7 +162,7 @@ export class RollbackSession {
     this.onFrame?.(f, resim, sounds);
   }
 
-  /** Handles a packet from a peer. */
+  /** 处理来自对端的数据包。 */
   receive(data: ArrayBuffer): void {
     const p = decodePacket(data);
     if (!p || !this.seats.includes(p.from) || p.from === this.local) return;
@@ -228,16 +228,16 @@ export class RollbackSession {
     for (let f = from; f <= end; f++) this.simulate(f, true);
   }
 
-  /** Frames up to which every seat's input is confirmed. */
+  /** 每个座位的输入都已确认到的帧。 */
   confirmedFrame(): number {
     let m = Infinity;
     for (const s of this.seats) if (!this.dropped.has(s)) m = Math.min(m, this.lastConf.get(s)!);
-    // A correction that arrived but is not re-simulated yet makes later frames provisional.
+    // 已到达但尚未重新模拟的修正会使后续帧暂时不确定。
     return Math.min(m, this.frame, this.rollbackFrom - 1);
   }
 
-  /** One fixed-rate tick: takes local input, corrects mispredictions, and advances one frame when allowed. */
-  /** Advances one frame if peers allow it. Returns false when `localInput` was not used. */
+  /** 一次固定频率 tick：接收本地输入、修正错误预测，并在允许时推进一帧。 */
+  /** 在对端允许时前进一帧。`localInput` 未被使用时返回 false。 */
   tick(localInput: PlayerInput): boolean {
     if (this.rollbackFrom <= this.frame) this.rollback();
     const next = this.frame + 1;
@@ -252,7 +252,7 @@ export class RollbackSession {
     for (const s of this.remotes) this.stats.silentFor[s] = this.now() - this.peerHeard.get(s)!;
     let advance = waiting.length === 0;
 
-    // Time sync: a peer that is behind us gets a frame to catch up now and then.
+    // 时间同步：落后于我们的对端会不时获得一帧来追赶。
     this.updateAdvantage();
     if (advance && this.skipCooldown <= 0 && this.advantageAvg > 1.0) {
       advance = false;
@@ -334,8 +334,8 @@ export class RollbackSession {
   }
 
   /**
-   * Host side of dropping a seat that left: the last frame of its input everyone will use, and the
-   * inputs this peer holds up to that frame, for peers that received fewer of them.
+   * 房主端移除已离开座位：所有人将使用的其输入最后一帧，以及此对端截至该帧持有的输入，
+   * 供收到较少输入的对端使用。
    */
   dropOffer(seat: number): { frame: number; data: ArrayBuffer } {
     const frame = this.lastConf.get(seat)!;
@@ -348,7 +348,7 @@ export class RollbackSession {
     return { frame, data: encodePacket(p) };
   }
 
-  /** Every peer applies the same drop: real input through `frame`, empty input after it. */
+  /** 每个对端应用相同的移除：到 `frame` 为止使用真实输入，之后使用空输入。 */
   applyDrop(seat: number, frame: number, data: ArrayBuffer): boolean {
     if (this.dropped.has(seat) || seat === this.local) return false;
     const p = decodePacket(data);
@@ -376,12 +376,12 @@ export class RollbackSession {
     return true;
   }
 
-  /** The packet that tells the other players this one is leaving. */
+  /** 通知其他玩家本玩家即将离开的数据包。 */
   goodbye(): ArrayBuffer {
     return encodePacket({ kind: Kind.Bye, from: this.local, t: 0 });
   }
 
-  /** Sends round-trip probes; call about once a second. */
+  /** 发送往返探测；大约每秒调用一次。 */
   probe(): void {
     for (const s of this.remotes) this.transport.send(s, encodePacket({ kind: Kind.Ping, from: this.local, t: this.now() }));
     for (const s of this.remotes) this.stats.pings[s] = Math.round(this.rtt.get(s) ?? 0);

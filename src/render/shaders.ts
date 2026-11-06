@@ -1,4 +1,4 @@
-// Shaders for sprites, stamps and pen lines. Colors are premultiplied by alpha throughout.
+// 角色、图章和画笔线条的着色器。所有颜色都已预乘 alpha。
 
 export const EFFECT_BITS = {
   color: 1 << 0,
@@ -185,7 +185,7 @@ void main() {
 }
 `;
 
-/** A full-target quad for the display mode passes, drawn from the sprite quad's -0.5 to 0.5 corners. */
+/** 显示模式通道用的全目标四边形，从角色四边形的 -0.5 到 0.5 角点绘制。 */
 export const POST_VERTEX = `
 attribute vec2 a_position;
 varying vec2 v_uv;
@@ -206,9 +206,9 @@ varying vec2 v_uv;
 `;
 
 /**
- * Averages each 2x2 block of the stage image (one linear sample at the block's center) and dithers the result to 256
- * colors: the 216-color cube of steps of 51 and 46 grays in steps of 255/45. Near-gray pixels take the finer grays.
- * The 8x8 ordered dither pattern is fixed to the pixel grid, so still images do not flicker.
+ * 将舞台图像的每个 2x2 块取平均（在块中心做一次线性采样）并将结果抖动到 256 色：
+ * 216 色立方体以 51 为步长，46 级灰色以 255/45 为步长。接近灰色的像素使用更细的灰色。
+ * 8x8 有序抖动图案固定在像素网格上，因此静态图像不会闪烁。
  */
 export const QUANTIZE = `${POST_HEAD}
 const float GRAY_CHROMA = 0.04;
@@ -229,8 +229,8 @@ void main() {
 `;
 
 /**
- * Enlarges an image with square pixels: each pixel fills a whole number of target pixels (u_scale), and linear
- * filtering blends only the one-pixel seam between neighbors, so a size that is not a whole multiple keeps even pixels.
+ * 用方形像素放大图像：每个像素填满整数个目标像素（u_scale），线性过滤只混合相邻像素之间
+ * 一像素宽的接缝，因此非整数倍尺寸也能保持像素均匀。
  */
 export const UPSCALE = `${POST_HEAD}
 uniform vec2 u_size;

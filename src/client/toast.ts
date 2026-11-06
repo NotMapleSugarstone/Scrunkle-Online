@@ -1,4 +1,4 @@
-// A one-line message over the top of the stage, such as "Replay saved".
+// 舞台顶部的一行消息，例如“回放已保存”。
 
 export class Toast {
   private el: HTMLDivElement;
@@ -11,7 +11,7 @@ export class Toast {
     stage.append(this.el);
   }
 
-  /** Shows a message for `ms` milliseconds, or until the next message when `ms` is 0. */
+  /** 显示消息 `ms` 毫秒；`ms` 为 0 时显示到下一条消息。 */
   show(text: string, ms = 2500): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;

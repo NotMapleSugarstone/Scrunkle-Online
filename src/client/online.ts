@@ -1,5 +1,5 @@
-// An online game: the shared simulation driven by the rollback session, with sound that follows
-// corrections, a status line for connection quality, and continuing without a player who left.
+// 在线游戏：由回滚会话驱动的共享模拟，声音会跟随修正，
+// 包含连接质量状态行，以及在某玩家离开后继续游戏。
 import type { PlayerInput } from '../engine/io.ts';
 import type { SoundEvent } from '../engine/sound-model.ts';
 import { RollbackSession } from '../net/rollback.ts';
@@ -15,7 +15,7 @@ import { seatScreen } from '../game/screens.ts';
 import { Game, startFixedLoop } from './game.ts';
 import type { LocalInput } from './input.ts';
 
-/** Plays sounds once per frame even when a frame is simulated again after a correction. */
+/** 即使某帧在修正后重新模拟，每帧也只播放一次声音。 */
 class RollbackAudio {
   private played = new Map<number, Set<string>>();
 
@@ -52,15 +52,15 @@ class RollbackAudio {
 
 export interface OnlineHud {
   update(text: string, warn: string): void;
-  /** Shows one button, or none for a null label. */
+  /** 显示一个按钮；label 为 null 时隐藏。 */
   action(label: string | null, onClick: () => void): void;
-  /** Shows the waiting panel over the stage, or hides it for a null title. */
+  /** 在舞台上显示等待面板；title 为 null 时隐藏。 */
   waiting(title: string | null, text?: string, button?: { label: string; onClick: () => void } | null): void;
 }
 
-/** Seconds the game waits on a player before the panel offers the host to continue without them. */
+/** 游戏等待某玩家多少秒后，面板会允许房主不等对方继续。 */
 const PROMPT_AFTER_S = 3;
-/** Milliseconds a "left the game" notice stays in the status line. */
+/** “离开游戏”通知在状态行中保留的毫秒数。 */
 const NOTICE_MS = 5_000;
 const FREEZE_REPORT_MS = 5_000;
 const AWAY_SILENT_MS = 1_000;
@@ -71,7 +71,7 @@ export class OnlineGame {
   private probeTimer: ReturnType<typeof setInterval> | null = null;
   private away = new Set<number>();
   private dropped = new Set<number>();
-  /** Seats that said goodbye: they closed the page or chose Leave. */
+  /** 已告别的座位：关闭页面或选择离开。 */
   private left = new Set<number>();
   private notice: { text: string; until: number } | null = null;
   private stuckSince: number | null = null;
@@ -108,7 +108,7 @@ export class OnlineGame {
     mesh.onFallback = (seat, reason) => report('link-fallback', { seat, reason, ...this.diagnostics() });
   }
 
-  /** The session and link state that problem reports carry. */
+  /** 问题报告携带的会话与连接状态。 */
   diagnostics(): Record<string, unknown> {
     const st = this.session.stats;
     return {
@@ -128,7 +128,7 @@ export class OnlineGame {
     };
   }
 
-  /** Seat list updates from the room: who is connected and who hosts now. */
+  /** 房间发来的座位列表更新：谁已连接、当前房主是谁。 */
   seatsChanged(seats: SeatInfo[], host: number): void {
     this.host = host;
     this.away.clear();
@@ -138,7 +138,7 @@ export class OnlineGame {
     }
   }
 
-  /** The room announced that the host continues without a seat. */
+  /** 房间宣布房主将在缺少某座位的情况下继续。 */
   onDropped(seat: number, frame: number, data: string): void {
     if (this.dropped.has(seat)) return;
     if (this.session.applyDrop(seat, frame, fromBase64(data))) this.wentOn(seat);
@@ -164,14 +164,14 @@ export class OnlineGame {
     this.stop = startFixedLoop(
       () => {
         const pressed = input.sampleKeys();
-        // Every controller and the touch controls play this player's own seat.
+        // 每个控制器和触屏控制都操作此玩家自己的座位。
         const acts = pads.sample().flat();
-        // Shared menus take everyone's keys as Player 1's; character select and matches take each seat's own.
+        // 共享菜单将所有人的按键视为玩家 1；角色选择和比赛使用各座位自己的按键。
         const seat = seatKeys(this.game.rt, seatScreen(this.game.rt) ? this.local : 0);
         const keys = new Set(translateKeys(pressed, own, seat));
         for (const k of actionKeys(acts, seat)) keys.add(k);
         const p: PlayerInput = { keys: [...keys] };
-        // Only the first seat drives the shared mouse pointer.
+        // 只有第一个座位驱动共享鼠标指针。
         const mouse = this.local === this.start.seats[0] ? input.sampleMouse() : undefined;
         if (mouse) p.mouse = mouse;
         if (this.game.question.pendingAnswer !== undefined) {
@@ -179,7 +179,7 @@ export class OnlineGame {
           this.game.question.pendingAnswer = undefined;
         }
         if (!this.session.tick(p)) {
-          // The frame did not advance, so offer the same input again next tick.
+          // 帧未推进，因此下一次 tick 重新提交相同输入。
           input.retap(pressed);
           pads.retap(acts);
           if (p.mouse) input.remouse(p.mouse);
@@ -207,7 +207,7 @@ export class OnlineGame {
     }
     parts.push(`${currentText('rollbacks')} ${st.rollbacks}`);
     let warn = '';
-    // A player whose room socket is reconnecting still plays while their inputs arrive directly.
+    // 房间套接字正在重连的玩家，只要输入仍可直连到达，就仍在游玩。
     const silentAway = [...this.away].filter((s) => (st.silentFor[s] ?? 0) > AWAY_SILENT_MS);
     const stuck = [...new Set([...st.waitingFor, ...silentAway])].filter((s) => !this.dropped.has(s));
     if (stuck.length) warn = currentFormat('waitingFor', { names: stuck.map((s) => this.name(s)).join(', ') });
@@ -226,10 +226,10 @@ export class OnlineGame {
       report('desync', { desync: st.desync, ...this.diagnostics() });
     }
     this.hud.update(parts.join('  |  '), warn);
-    // A player who closed the page or chose Leave said goodbye, so the host goes on without them at once.
+    // 关闭页面或选择离开的玩家已告别，因此房主立即继续而不等待。
     const isHost = this.local === this.host;
     if (isHost) for (const s of this.left) if (!this.dropped.has(s)) this.dropSeat(s);
-    // Anyone else may only be slow, so after a few seconds the host decides, and everyone sees who the game waits for.
+    // 其他玩家可能只是慢，因此几秒后由房主决定，所有人都会看到游戏在等谁。
     const waited = this.stuckSince === null ? 0 : (now - this.stuckSince) / 1000;
     const on = stuck.find((s) => !this.dropped.has(s));
     if (on !== undefined && waited > PROMPT_AFTER_S && !st.desync) {
@@ -243,7 +243,7 @@ export class OnlineGame {
   leave(): void {
     this.stop?.();
     if (this.probeTimer) clearInterval(this.probeTimer);
-    // The goodbye goes both directly and through the room, so it arrives even if one way is down.
+    // 告别消息同时通过直连和房间发送，即使其中一条路径失效也能到达。
     const bye = this.session.goodbye();
     for (const s of this.start.seats) {
       if (s === this.local || this.dropped.has(s)) continue;

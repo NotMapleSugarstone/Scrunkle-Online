@@ -1,6 +1,6 @@
-// Messages between players' browsers and a matchmaking room, with a strict reader for each
-// direction. The Worker and the game share this file. Gameplay inputs do not pass through
-// here: they travel peer to peer (see wire.ts), or through the room's relay only as a fallback.
+// 玩家浏览器与匹配房间之间的消息，每个方向都有严格的读取器。
+// Worker 和游戏共用此文件。对局输入不经过
+// 这里：它们点对点传输（见 wire.ts），只在中继兜底时经过房间。
 
 export const PROTOCOL = 1;
 export const SEATS = 2;
@@ -9,7 +9,7 @@ export const FRAME_MAX = 16_384;
 export const SIGNAL_MAX = 12_000;
 export const RELAY_MAX = 2_048;
 export const DROP_MAX = 6_000;
-/** Seconds a dropped player's seat is held for a rejoin. */
+/** 掉线玩家的座位为重新加入保留的秒数。 */
 export const HOLD_SECONDS = 60;
 
 export interface SeatInfo {
@@ -20,11 +20,11 @@ export interface SeatInfo {
 
 export interface StartInfo {
   seed: number;
-  /** Simulation start time; the date blocks read it as local time. */
+  /** 模拟开始时间；日期积木将其读取为本地时间。 */
   t0: number;
-  /** Seats that play, in order. */
+  /** 参与游玩的座位，按顺序排列。 */
   seats: number[];
-  /** Input delay in frames. */
+  /** 输入延迟，以帧为单位。 */
   delay: number;
 }
 
@@ -34,7 +34,7 @@ export type ToRoom =
   | { type: 'start'; t0: number; delay: number }
   | { type: 'signal'; to: number; data: string }
   | { type: 'relay'; to: number; data: string }
-  /** Host only: continue without a seat that left; its input is empty after `frame`. */
+  /** 仅房主：在某座位离开后继续；该座位在 `frame` 之后的输入为空。 */
   | { type: 'drop'; seat: number; frame: number; data: string }
   | { type: 'leave' }
   | { type: 'ping' };
@@ -51,7 +51,7 @@ export type FromRoom =
 
 export type QueueReply = { ok: true; room: string; code?: string } | { ok: false; reason: string };
 
-// ---------------------------------------------------------------- readers
+// ---------------------------------------------------------------- 读取器
 
 type Obj = Record<string, unknown>;
 const NO = undefined;
@@ -70,7 +70,7 @@ function frame(raw: unknown, max: number): Obj | string {
   return v as Obj;
 }
 
-/** The object if it has exactly the allowed keys (and at least the required ones). */
+/** 如果对象恰好包含允许的键（且至少包含必需的键），则返回该对象。 */
 function obj(v: unknown, allowed: string[], required = allowed): Obj | undefined {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return NO;
   const o = v as Obj;
@@ -85,19 +85,19 @@ export const isBuild = (v: unknown): v is string => typeof v === 'string' && /^[
 export const isToken = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(v);
 const isSeat = (v: unknown): v is number => whole(v, 0, SEATS - 1);
 
-/** A player name holds what a Scratch username may: letters, digits, `_` and `-`. */
+/** 玩家名称只包含 Scratch 用户名允许的字符：字母、数字、`_` 和 `-`。 */
 const NAME = new RegExp(`^[A-Za-z0-9_-]{1,${NAME_MAX}}$`);
 
 export function readName(v: unknown): string | undefined {
   return typeof v === 'string' && NAME.test(v) ? v : NO;
 }
 
-/** The name with the characters a name may not hold removed, cut to `NAME_MAX`. */
+/** 移除了名称不允许字符并截断到 `NAME_MAX` 的名称。 */
 export function cleanName(s: string): string {
   return s.replace(/[^A-Za-z0-9_-]/g, '').slice(0, NAME_MAX);
 }
 
-/** A made-up name, `player` and 2 to 7 digits, which needs no Scratch account. */
+/** 编造的名称，`player` 加 2 到 7 位数字，无需 Scratch 账号。 */
 export const isGeneratedName = (s: string): boolean => /^player\d{2,7}$/i.test(s);
 
 function readSeats(v: unknown): SeatInfo[] | undefined {

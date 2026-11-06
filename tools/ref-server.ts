@@ -1,6 +1,6 @@
-// Keeps one reference runner loaded and runs scenarios on request, so parity checks skip the minutes-long load.
-// Usage: npx tsx tools/ref-server.ts [port]   (parity.ts uses it when it answers on 127.0.0.1:8793, or on REF_PORT when set)
-// POST /run with {scenario, fullAt?} returns {digests, fulls}. GET /status answers when ready. Stop it with Ctrl+C or POST /quit.
+// 保持一个参考运行器常驻并按请求运行场景，使一致性检查跳过数分钟的加载。
+// 用法：npx tsx tools/ref-server.ts [port]   （parity.ts 在 127.0.0.1:8793 响应时使用它，或使用 REF_PORT）
+// POST /run 传入 {scenario, fullAt?} 返回 {digests, fulls}。就绪后 GET /status 响应。用 Ctrl+C 或 POST /quit 停止。
 import http from 'node:http';
 import { openReference } from './lib/reference.ts';
 import { listsKey } from './lib/lists.ts';
@@ -14,12 +14,12 @@ console.log(`reference loaded in ${((Date.now() - t0) / 1000).toFixed(0)} s, ser
 let busy = Promise.resolve();
 const CHUNK = 300;
 
-// Requests wait in the queue for minutes, so the default request timeouts would reset them.
+// 请求会在队列中等待数分钟，默认请求超时会将其重置。
 http
   .createServer({ requestTimeout: 0, headersTimeout: 0, keepAliveTimeout: 0 }, (req, res) => {
     if (req.method === 'GET' && req.url === '/status') { res.end('ready'); return; }
     if (req.method === 'POST' && req.url === '/quit') { res.end('bye'); void ref.close().then(() => process.exit(0)); return; }
-    // Evaluates a JavaScript expression in the reference page after the last run, for debugging (H and H.vm are there).
+    // 在最后一次运行后于参考页面中求 JavaScript 表达式，用于调试（H 和 H.vm 可用）。
     if (req.method === 'POST' && req.url === '/eval') {
       let code = '';
       req.on('data', (c) => (code += c));

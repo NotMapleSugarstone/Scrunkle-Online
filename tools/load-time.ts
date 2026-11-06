@@ -1,5 +1,5 @@
-// Times how long the built site takes from opening until Play is enabled, with an empty cache, in headless Edge.
-// Run `npm run build` first. Usage: npx tsx tools/load-time.ts [runs]
+// 在无头 Edge 中清空缓存，测量构建后的站点从打开到“开始”可用的时间。
+// 先运行 `npm run build`。用法：npx tsx tools/load-time.ts [runs]
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { startStaticServer } from './lib/static-server.ts';
@@ -11,10 +11,10 @@ const browser = await chromium.launch({ channel: 'msedge', headless: true, args:
 for (let i = 0; i < runs; i++) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
-  // The browser keeps 250 resource timings unless told otherwise, and the game loads thousands of files.
+  // 除非另行设置，浏览器只保留 250 项资源计时，而游戏会加载数千个文件。
   await page.addInitScript(() => {
     performance.setResourceTimingBufferSize(20_000);
-    // Adds up the time the renderer spends making each image's textures, from the moment the page creates it.
+    // 统计渲染器从页面创建图像起为每张图像制作纹理的时间。
     const w = window as unknown as { __game?: { renderer: Record<string, unknown> }; __prepMs: number };
     w.__prepMs = 0;
     const hook = setInterval(() => {
@@ -36,7 +36,7 @@ for (let i = 0; i < runs; i++) {
   await page.waitForFunction(() => [...document.querySelectorAll('.lobby-menu button')].some((b) => b.textContent === 'Play offline' && !(b as HTMLButtonElement).disabled), null, { timeout: 600_000, polling: 200 });
   const ms = Date.now() - t0;
   const progress = await page.evaluate(() => document.querySelector('.lobby-progress')?.textContent ?? '');
-  // When the last image arrived, which separates network time from decoding and uploading.
+  // 最后一张图像到达的时间，用于区分网络时间与解码和上传时间。
   const images = await page.evaluate(() => {
     const list = performance.getEntriesByType('resource').filter((e) => e.name.includes('/assets/costumes/'));
     return { count: list.length, lastEnd: Math.max(...list.map((e) => (e as PerformanceResourceTiming).responseEnd)) };

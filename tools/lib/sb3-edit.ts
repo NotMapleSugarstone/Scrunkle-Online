@@ -1,4 +1,4 @@
-// Finds, moves and deletes existing blocks of a target, for patches that change scripts without adding blocks.
+// 查找、移动和删除目标中已有的积木，用于不添加积木而修改脚本的补丁。
 import type { Target } from './sb3-patch.ts';
 
 export type Block = Target['blocks'][string];
@@ -16,20 +16,20 @@ export class Editor {
     return b;
   }
 
-  /** The definition block of a custom block, found by its proccode. */
+  /** 自定义积木的定义块，按 proccode 查找。 */
   procedure(proccode: string): string {
     const proto = Object.entries(this.B).find(([, b]) => b?.opcode === 'procedures_prototype' && b.mutation?.proccode === proccode);
     if (!proto) throw new Error(`${this.t.name}: no procedure ${proccode}`);
     return proto[1].parent!;
   }
-  /** The hat of the only script that runs when `message` is received. */
+  /** 收到 `message` 时运行的唯一脚本的帽子。 */
   receiver(message: string): string {
     const hats = Object.entries(this.B).filter(([, b]) => b?.opcode === 'event_whenbroadcastreceived' && String(b.fields.BROADCAST_OPTION[0]) === message);
     if (hats.length !== 1) throw new Error(`${this.t.name}: ${hats.length} receivers of ${message}`);
     return hats[0][0];
   }
 
-  /** Every block of a script below `top`: statements, substacks and reporters, in order. */
+  /** 脚本中 `top` 以下的每个积木：语句、子栈和报告器，按顺序排列。 */
   descendants(top: string, followNext = true): string[] {
     const out: string[] = [];
     const visit = (id: string | null, chain: boolean) => {
@@ -45,24 +45,24 @@ export class Editor {
     visit(top, followNext);
     return out;
   }
-  /** The single block under `top` that `test` accepts; throws when there is none or more than one. */
+  /** `top` 下 `test` 接受的唯一积木；没有或不止一个时抛出错误。 */
   one(top: string, what: string, test: (b: Block, id: string) => boolean): string {
     const hits = this.descendants(top).filter((id) => test(this.block(id), id));
     if (hits.length !== 1) throw new Error(`${this.t.name}: ${hits.length} blocks match ${what}`);
     return hits[0];
   }
 
-  /** The text of a literal input, or undefined when a reporter or nothing fills it. */
+  /** 字面量输入的文本；由报告器填充或为空时为 undefined。 */
   literal(id: string, input: string): string | undefined {
     const v = this.block(id).inputs[input];
     return v && v[0] === 1 && Array.isArray(v[1]) ? String(v[1][1]) : undefined;
   }
-  /** The name of a variable or list reporter stored inline in an input. */
+  /** 内联存储在输入中的变量或列表报告器名称。 */
   inlineName(id: string, input: string): string | undefined {
     const v = this.block(id).inputs[input];
     return v && Array.isArray(v[1]) && (v[1][0] === 12 || v[1][0] === 13) ? String(v[1][1]) : undefined;
   }
-  /** The reporter block in an input, if any. */
+  /** 输入中的报告器积木（若有）。 */
   child(id: string, input: string): string | undefined {
     const v = this.block(id).inputs[input];
     const c = v?.[1];
@@ -74,9 +74,9 @@ export class Editor {
     (v[1] as unknown[])[1] = value;
   }
 
-  // ------------------------------------------------------------ statements
+  // ------------------------------------------------------------ 语句
 
-  /** Takes a statement out of its stack and joins the blocks around it. */
+  /** 从堆栈中取出语句，并连接其前后的积木。 */
   detach(id: string): void {
     const b = this.block(id);
     const p = b.parent;
@@ -97,7 +97,7 @@ export class Editor {
     b.parent = null;
     b.next = null;
   }
-  /** Puts a detached statement after `after`. */
+  /** 将分离的语句放到 `after` 之后。 */
   insertAfter(id: string, after: string): void {
     const b = this.block(id);
     const a = this.block(after);
@@ -106,7 +106,7 @@ export class Editor {
     if (a.next) this.block(a.next).parent = id;
     a.next = id;
   }
-  /** Moves the statements from `first` to `last`, a run in one stack, into the empty substack of `wrapper`, which takes their place. */
+  /** 将同一堆栈中从 `first` 到 `last` 的语句移入 `wrapper` 的空子栈，由该子栈取代它们的位置。 */
   wrap(first: string, last: string, wrapper: string): void {
     const f = this.block(first);
     const l = this.block(last);
@@ -127,7 +127,7 @@ export class Editor {
     w.inputs.SUBSTACK = [2, first];
     f.parent = wrapper;
   }
-  /** Puts a detached statement first in a substack of `owner`. */
+  /** 将分离的语句放到 `owner` 某个子栈的开头。 */
   insertFirst(id: string, owner: string, input = 'SUBSTACK'): void {
     const o = this.block(owner);
     const old = o.inputs[input]?.[1] as string | undefined;
@@ -137,7 +137,7 @@ export class Editor {
     b.next = old ?? null;
     if (old) this.block(old).parent = id;
   }
-  /** Deletes a block with its reporters, shadows and substacks, but not the blocks after it. */
+  /** 删除积木及其报告器、shadow 和子栈，但不删除其后的积木。 */
   deleteTree(id: string): number {
     let n = 0;
     const visit = (bid: string, chain: boolean) => {
@@ -158,12 +158,12 @@ export class Editor {
     visit(id, false);
     return n;
   }
-  /** Takes a statement out of its stack and deletes it. Returns the number of blocks removed. */
+  /** 从堆栈中取出语句并删除。返回删除的积木数。 */
   remove(id: string): number {
     this.detach(id);
     return this.deleteTree(id);
   }
-  /** Deletes a whole script from its hat. */
+  /** 从帽子开始删除整个脚本。 */
   removeScript(top: string): number {
     let n = 0;
     for (let id: string | null = top; id; ) {
@@ -175,9 +175,9 @@ export class Editor {
     return n;
   }
 
-  // ------------------------------------------------------------ reporters
+  // ------------------------------------------------------------ 报告器
 
-  /** Takes a reporter out of its parent's input, leaving the input's shadow or an empty slot. */
+  /** 从父积木的输入中取出报告器，留下输入的 shadow 或空槽。 */
   unplug(id: string): void {
     const b = this.block(id);
     const p = this.block(b.parent!);
@@ -188,7 +188,7 @@ export class Editor {
     else delete p.inputs[k];
     b.parent = null;
   }
-  /** Fills an input of `parent` with the reporter `child` (moved from wherever it was) and deletes what filled it before. */
+  /** 用报告器 `child`（从其原位置移动）填充 `parent` 的输入，并删除原先填充的内容。 */
   plug(parent: string, input: string, child: string): number {
     const c = this.block(child);
     if (c.parent) this.unplug(child);
@@ -202,7 +202,7 @@ export class Editor {
     c.parent = parent;
     return removed;
   }
-  /** Replaces whatever fills an input with an inline variable or list reporter. */
+  /** 用内联变量或列表报告器替换输入中的所有内容。 */
   plugInline(parent: string, input: string, kind: 12 | 13, name: string, id: string): number {
     const p = this.block(parent);
     const v = p.inputs[input];
@@ -214,7 +214,7 @@ export class Editor {
   }
 }
 
-/** Detaches the comments of deleted blocks so they stay on the workspace and the project still loads. */
+/** 分离已删除积木的注释，使其留在工作区且项目仍能加载。 */
 export function keepOrphanComments(t: Target): number {
   let n = 0;
   for (const c of Object.values((t as { comments?: Record<string, { blockId: string | null }> }).comments ?? {})) {
@@ -223,7 +223,7 @@ export function keepOrphanComments(t: Target): number {
   return n;
 }
 
-/** The blocks of a target as the editor shows them: non-shadow blocks and the inline variable and list reporters. */
+/** 编辑器显示的目标积木：非 shadow 积木以及内联变量和列表报告器。 */
 export function countBlocks(t: Target): number {
   let n = 0;
   for (const b of Object.values(t.blocks)) {

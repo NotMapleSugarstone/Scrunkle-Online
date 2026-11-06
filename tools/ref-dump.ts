@@ -1,5 +1,5 @@
-// Dumps costume metadata, normalized vector sources and touching masks from the reference renderer.
-// Writes out/ref-meta.json, out/svg/<md5ext> and src/game/masks.bin.
+// 从参考渲染器导出造型元数据、规范化矢量源和接触遮罩。
+// 写入 out/ref-meta.json、out/svg/<md5ext> 和 src/game/masks.bin。
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -7,7 +7,7 @@ import { openReference, ROOT } from './lib/reference.ts';
 import { MASK_FILE } from './lib/silhouettes.ts';
 import { encodeMaskSet, packMask, type MaskSet } from '../src/engine/masks.ts';
 
-// Masks only for sprites that test touching and the sprites they test, because the full set is too large.
+// 只为测试接触的角色及被其测试的角色生成遮罩，因为完整集合太大。
 const TOUCHING = ['Players', 'Stage', 'Border', 'costumes', 'Hitbox Engine', 'FX', 'UI', 'MenuUI'];
 
 const ref = await openReference();

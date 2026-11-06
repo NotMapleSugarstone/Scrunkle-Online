@@ -1,4 +1,4 @@
-// Checks the portable math functions against this engine's Math: exact matches and worst error in ulps.
+// 用此引擎的 Math 检查可移植数学函数：完全匹配以及最差误差（以 ulp 计）。
 import * as D from '../src/engine/dmath.ts';
 
 function ulps(a: number, b: number): number {

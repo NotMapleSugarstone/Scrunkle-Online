@@ -1,4 +1,4 @@
-// Decides which scripts of a Scratch project can ever run.
+// 判断 Scratch 项目中哪些脚本可能运行。
 import type { Target } from './sb3-patch.ts';
 
 type Block = Target['blocks'][string];
@@ -8,8 +8,8 @@ export const HATS = new Set(['event_whenflagclicked', 'event_whenkeypressed', 'e
   'event_whentouchingobject']);
 
 /**
- * The lower-case names of every message the project can send. A broadcast computed at run time can send any text the
- * project holds, so while one exists every list item, variable value and text literal counts as sent.
+ * 项目可发送的每条消息的小写名称。运行时计算的广播可发送项目持有的任意文本，
+ * 因此只要存在这种广播，每个列表项、变量值和文本字面量都算已发送。
  */
 export function sentMessages(targets: Target[]): Set<string> {
   const sent = new Set<string>();
@@ -37,7 +37,7 @@ export function sentMessages(targets: Target[]): Set<string> {
 
 export interface DeadScript { top: string; kind: 'no hat' | 'message never sent' | 'procedure never called'; what: string }
 
-/** The top-level scripts of a target that can never run: stacks without a hat, receivers of messages nothing sends, and procedures that no live script calls. */
+/** 目标中永远无法运行的顶层脚本：没有帽子的堆栈、无人发送消息的接收器，以及没有活动脚本调用的过程。 */
 export function deadScripts(t: Target, sent: Set<string>): DeadScript[] {
   const dead: DeadScript[] = [];
   const definitions = new Map<string, string>();
@@ -50,7 +50,7 @@ export function deadScripts(t: Target, sent: Set<string>): DeadScript[] {
     else if (b.opcode === 'event_whenbroadcastreceived' && !sent.has(String(b.fields.BROADCAST_OPTION[0]).toLowerCase())) dead.push({ top: id, kind: 'message never sent', what: String(b.fields.BROADCAST_OPTION[0]) });
     else live.push(id);
   }
-  // Procedures are live when a live script calls them, so follow calls until no new procedure turns up.
+  // 过程在活动脚本调用时变为活动，因此跟随调用直到不再出现新过程。
   const reached = new Set<string>();
   const calls = (top: string): string[] => {
     const out: string[] = [];

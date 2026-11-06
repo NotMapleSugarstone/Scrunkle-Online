@@ -1,4 +1,4 @@
-// Owns one simulation plus everything that presents it: renderer, audio and overlays.
+// 持有一个模拟及其全部呈现组件：渲染器、音频和覆盖层。
 import { Runtime, FRAME_MS } from '../engine/runtime.ts';
 import type { PlayerInput } from '../engine/io.ts';
 import { effectsUsed, modules, monitors } from '../game/generated/index.ts';
@@ -18,8 +18,8 @@ export const ASSET_BASE = `${import.meta.env.BASE_URL}assets/`;
 const MENU_SPRITES = new Set(['UI', 'Transition', 'Text', 'Border']);
 
 /**
- * The effect mixes to compile shaders for before play: every mix of the color, brightness and ghost effects the game
- * uses, each alone or with one of the shape effects it uses. Rarer mixes compile when first drawn.
+ * 游玩前预编译的着色器效果组合：游戏使用的颜色、亮度和幽灵效果的每种组合，
+ * 以及与其搭配使用的形状效果。较少见的组合会在首次绘制时编译。
  */
 const GAME_EFFECTS = (() => {
   const used = (name: keyof typeof EFFECT_BITS) => (effectsUsed.includes(name) ? EFFECT_BITS[name] : 0);
@@ -31,7 +31,7 @@ const GAME_EFFECTS = (() => {
   return [...out];
 })();
 
-/** Fetches and unzips the touching masks. */
+/** 获取并解压接触遮罩。 */
 async function loadMasks(): Promise<MaskSet> {
   const res = await fetch(maskUrl);
   if (!res.ok || !res.body) throw new Error(`masks: HTTP ${res.status}`);
@@ -39,12 +39,12 @@ async function loadMasks(): Promise<MaskSet> {
   return decodeMaskSet(new Uint8Array(await new Response(plain).arrayBuffer()));
 }
 
-/** The masks, which every runtime made after the first load shares. */
+/** 遮罩；首次加载后创建的所有运行时共享。 */
 let masks: MaskSet | null = null;
 
 export interface GameOptions {
   seed: number;
-  /** Simulation start time; also drives the date blocks. */
+  /** 模拟开始时间；也驱动日期积木。 */
   t0: number;
 }
 
@@ -56,7 +56,7 @@ export class Game {
   lists: ListMonitors;
   vars: VarMonitors;
   bubbles: Bubbles;
-  /** The port's pause menu, for a game with a pause rule. */
+  /** 移植版的暂停菜单，用于带暂停规则的游戏。 */
   pause: PauseMenu | null;
   private prefetching = false;
   private lastFighters = '';
@@ -80,7 +80,7 @@ export class Game {
     this.pause = pauseRule ? new PauseMenu(overlay, pauseRule) : null;
   }
 
-  /** A runtime with the masks installed and the green flag clicked. The masks must have loaded. */
+  /** 安装遮罩并点击绿旗后的运行时。遮罩必须已加载。 */
   static createRuntime(opts: GameOptions): Runtime {
     const rt = new Runtime(modules, skins, { seed: opts.seed, t0: opts.t0, pause: pauseRule });
     rt.stampOwners = new WeakMap();
@@ -90,9 +90,8 @@ export class Game {
   }
 
   /**
-   * Loads the touching masks, every image with its textures made, and every short sound before play, as the
-   * original loads its whole project before it starts. Without this, menus and the intro drew blank frames while
-   * their images arrived. The music keeps loading after play starts.
+   * 在游玩前加载接触遮罩、所有带纹理的图像和所有短声音，如同原版在开始前加载整个项目。
+   * 否则菜单和开场会在图像到达前绘制空白帧。音乐在开始游玩后继续加载。
    */
   async load(onProgress: (done: number, total: number) => void): Promise<void> {
     const counts = { images: [0, skins.length], sounds: [0, this.rt.sprites.reduce((n, s) => n + s.sounds.length, 0)] };
@@ -171,26 +170,26 @@ export class Game {
   }
 }
 
-/** Runs in a worker and posts a message every 4 ms, which keeps arriving in a background tab. */
+/** 在 Worker 中运行，每 4 毫秒发送一条消息，使后台标签页也能持续收到。 */
 const HEARTBEAT = 'const beat = () => { postMessage(0); setTimeout(beat, 4); }; beat();';
 
-/** How early a frame may start, so timing noise in screen refreshes cannot push a frame to the next refresh. */
+/** 帧可以提前开始的量，避免屏幕刷新抖动把帧推到下一次刷新。 */
 const SLACK_MS = 4;
-/** How late a frame may get before the heartbeat runs it, which is longer than a refresh at 50 Hz or more. */
+/** 帧迟到多久后由心跳运行；该值大于 50 Hz 以上刷新间隔。 */
 const LATE_MS = 25;
 
 /**
- * Calls `tick` once per frame, every FRAME_MS like the original, then `after` once if any frame ran.
- * Screen refreshes drive the loop, so each frame starts on a refresh and frames stay evenly spaced.
- * Animation frames stop in background tabs and slow down on some screens, so a worker's heartbeat
- * runs any frame that is LATE_MS overdue, or due at all once refreshes stop, and an online match keeps running.
+ * 每帧调用一次 `tick`，间隔与原版一样为 FRAME_MS；只要运行过帧，随后调用一次 `after`。
+ * 屏幕刷新驱动循环，因此每帧从一次刷新开始并保持均匀间隔。后台标签页会停止动画帧，
+ * 某些屏幕也会变慢，因此 Worker 心跳会运行迟到 LATE_MS 的帧，或在刷新停止后运行到期帧，
+ * 让在线比赛继续。
  */
 export function startFixedLoop(tick: () => void, after: () => void): () => void {
   const clock = () => performance.timeOrigin + performance.now();
   let next = clock() + FRAME_MS;
   let stopped = false;
   const run = (now: number) => {
-    // After a long stall the loop skips ahead rather than playing the missed frames back at once.
+    // 长时间卡顿后，循环会跳过遗漏的帧，而不是一次性补播。
     if (now - next > 250) next = now;
     let ran = false;
     while (now >= next - SLACK_MS) {
@@ -220,8 +219,8 @@ export function startFixedLoop(tick: () => void, after: () => void): () => void 
     heard = true;
     beat();
   };
-  // Some embedded browsers never start a worker made from a blob. The page's own timers then
-  // give the heartbeat, though they slow down while the tab is in the background.
+  // 某些嵌入式浏览器无法启动由 blob 创建的 Worker。此时使用页面自身的定时器
+  // 提供心跳，尽管标签页在后台时它们会变慢。
   const fallback = window.setTimeout(() => {
     if (heard || stopped) return;
     worker.terminate();

@@ -1,13 +1,13 @@
-// The Worker's bindings, and the one lobby every request reaches.
+// Worker 的绑定，以及每个请求都会访问的同一个大厅。
 import type { Lobby } from './lobby';
 import type { Room } from './room';
 
 export interface Env {
   ROOM: DurableObjectNamespace<Room>;
   LOBBY: DurableObjectNamespace<Lobby>;
-  /** Comma-separated origins that may use the rooms. Any localhost port may as well. */
+  /** 允许使用房间的逗号分隔源；任意 localhost 端口也可以。 */
   ALLOWED_ORIGINS?: string;
-  /** The most rooms the lobby opens in a UTC day. */
+  /** 大厅每个 UTC 日最多开放的房间数。 */
   ROOMS_PER_DAY?: string;
 }
 

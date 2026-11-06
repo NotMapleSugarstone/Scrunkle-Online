@@ -1,6 +1,6 @@
-// Compares the order of thread steps in the reference and the port over a frame range, tick by tick, and prints
-// the first step where they differ. Finds scheduling differences that leave the end-of-frame state equal.
-// Needs tools/ref-server.ts running. Usage: npx tsx tools/parity-ticks.ts <scenario> <from frame> <to frame>
+// 按 tick 比较参考实现和移植版在一段帧范围内的线程步骤顺序，并打印
+// 第一个不同的步骤。用于找出不影响帧末状态的调度差异。
+// 需要 tools/ref-server.ts 正在运行。用法：npx tsx tools/parity-ticks.ts <scenario> <from frame> <to frame>
 import fs from 'node:fs';
 import path from 'node:path';
 import { serverPost, SERVER } from './lib/ref-client.ts';
@@ -13,7 +13,7 @@ const to = Number(process.argv[4]);
 const evalRef = async (code: string) => (await fetch(`${SERVER}/eval`, { method: 'POST', body: code })).text();
 await evalRef(`H.trace = { from: ${from}, to: ${to}, log: [] }; 1`);
 await serverPost('/run', { scenario: { ...sc, frames: to }, fullAt: [], lists: listsKey() });
-// The original marks a thread that yielded as running again before its step returns.
+// 原版会在 yield 的线程步骤返回前再次将其标记为运行中。
 const ref = (JSON.parse(await evalRef('H.trace.log')) as unknown[][]).map((e) => (e[4] === 2 ? [...e.slice(0, 4), 0] : e));
 await evalRef('H.trace = null; 1');
 

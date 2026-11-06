@@ -1,6 +1,6 @@
-// The matchmaking Worker: join codes come from the one lobby, and each game's sockets go to its own
-// room. Every request but the health check passes a rate limit by address, with a backstop for all
-// addresses together. Gameplay traffic normally flows peer to peer and never reaches this Worker.
+// 匹配 Worker：加入码来自唯一的大厅，每局游戏的套接字发往各自
+// 的房间。除健康检查外的每个请求都要按地址限流，并以所有地址合计的上限兜底。
+// 对局流量通常点对点传输，根本不会到达此 Worker。
 import { PROTOCOL, isBuild, type QueueReply } from '../../src/net/protocol';
 import { lobbyOf, type Env } from './env';
 import { Lobby } from './lobby';
@@ -16,7 +16,7 @@ const WORLD_PER_SECOND = 100;
 const BUCKETS_MAX = 5000;
 const BUCKET_IDLE_MS = 10 * 60 * 1000;
 const BODY_MAX = 1024;
-/** Problem reports from players' pages have their own, smaller limit so they never block hosting or joining. */
+/** 玩家页面提交的问题报告有单独且更小的限额，因此永远不会阻塞建房或加入。 */
 const REPORT_BURST = 10;
 const REPORT_PER_SECOND = 0.2;
 const REPORT_MAX = 8192;
@@ -53,7 +53,7 @@ function reportAllowed(address: string, now: number): boolean {
   return draw(b, REPORT_BURST, REPORT_PER_SECOND, now);
 }
 
-/** Logs a report a player's page sent about a problem (a freeze, a desync, a lost link or a script error). */
+/** 记录玩家页面提交的问题报告（卡死、不同步、连接丢失或脚本错误）。 */
 async function takeReport(request: Request, address: string): Promise<number> {
   const text = await request.text();
   if (text.length > REPORT_MAX) return 413;
@@ -150,7 +150,7 @@ export default {
       return new Response('not found', { status: 404, headers: cors });
     }
 
-    // A socket handshake is not covered by CORS, so the origin is checked here.
+    // CORS 不覆盖套接字握手，因此在这里检查来源。
     const m = url.pathname.match(/^\/api\/room\/([A-Za-z0-9_-]{1,64})$/);
     if (m) {
       if (!allowedOrigin(env, origin)) return new Response('forbidden origin', { status: 403, headers: cors });

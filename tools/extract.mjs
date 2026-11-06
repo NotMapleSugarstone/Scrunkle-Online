@@ -1,5 +1,5 @@
-// Unzips the source project into sb3/ (project.json plus costume and sound files), and writes src/game/runtime.json:
-// which runtime the project was made for and the stage it set, which the engine, transpiler and reference runner follow.
+// 将源项目解压到 sb3/（project.json 以及造型和声音文件），并写入 src/game/runtime.json：
+// 记录项目面向哪个运行时以及它设置的舞台，引擎、转译器和参考运行器都遵循这些。
 import fs from 'node:fs';
 import path from 'node:path';
 import JSZip from 'jszip';
@@ -17,15 +17,15 @@ for (const [name, entry] of Object.entries(zip.files)) {
 }
 console.log(`extracted ${n} files to ${out}`);
 
-// A project saved by the compiling runtime names it in meta.platform, and its settings live in a stage comment that
-// ends in "_twconfig_". Older saves have only the comment.
+// 由编译运行时保存的项目会在 meta.platform 中注明，其设置位于以 "_twconfig_" 结尾的舞台注释中。
+// 较早的存档只有注释。
 const project = JSON.parse(fs.readFileSync(path.join(out, 'project.json'), 'utf8'));
 const stage = project.targets.find((t) => t.isStage);
 const comment = Object.values(stage.comments ?? {}).find((c) => typeof c.text === 'string' && c.text.trimEnd().endsWith('_twconfig_'));
 const compiled = project.meta?.platform?.name === 'TurboWarp' || !!comment;
 let config = {};
 if (comment) {
-  // The settings are the JSON on the line that ends in the marker, as the original reads them.
+  // 设置就是标记所在行末尾的 JSON，按原版读取方式解析。
   const line = comment.text.split('\n').find((l) => l.endsWith('_twconfig_'));
   config = JSON.parse(line.slice(0, line.lastIndexOf('//')));
 }
@@ -36,7 +36,7 @@ const runtime = {
   framerate: config.framerate ?? 30,
 };
 
-// The port reproduces the default runtime options only. Anything else changes the simulation and needs engine work.
+// 移植版只复现默认运行时选项。其他选项会改变模拟，需要修改引擎。
 const problems = [];
 if (runtime.framerate !== 30) problems.push(`framerate ${runtime.framerate} (the engine steps at 30 frames per second)`);
 const options = config.runtimeOptions ?? {};

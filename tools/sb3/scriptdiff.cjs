@@ -1,4 +1,4 @@
-// Pairs the scripts of two projects by sprite and hat, and writes the scripts each side lacks and a line diff of each changed one.
+// 按角色和帽子配对两个项目的脚本，写出各方缺少的脚本以及每个变化脚本的行差异。
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -24,7 +24,7 @@ function scripts(t, stage) {
   return list;
 }
 
-// Shared lines over total lines, for pairing scripts that share a hat.
+// 共享行数除以总行数，用于配对共享帽子的脚本。
 function similarity(x, y) {
   const s = new Map();
   for (const l of x.body) s.set(l, (s.get(l) || 0) + 1);
@@ -38,7 +38,7 @@ function pair(xs, ys) {
   for (const y of ys) { if (!byHat.has(y.hat)) byHat.set(y.hat, []); byHat.get(y.hat).push(y); }
   const pairs = [], onlyA = [];
   const used = new Set();
-  // Identical bodies pair first, then the most similar remaining script with the same hat.
+  // 先配对相同主体，再将剩余最相似的脚本与相同帽子配对。
   for (const x of xs) {
     const c = (byHat.get(x.hat) || []).find(y => !used.has(y) && y.text === x.text);
     if (c) { used.add(c); pairs.push([x, c]); x.done = true; }
@@ -71,7 +71,7 @@ for (const name of names) {
   const ta = A.targets.find(t => t.name === name), tb = B.targets.find(t => t.name === name);
   if (!ta || !tb) { summary.push(`${name}: only in ${ta ? 'A' : 'B'}`); continue; }
   const sa = scripts(ta, A.targets.find(x => x.isStage)), sb = scripts(tb, B.targets.find(x => x.isStage));
-  // A B procedure that extends an A proccode prints as the A call when its extra arguments are empty.
+  // 扩展 A proccode 的 B 过程在其额外参数为空时打印为 A 调用。
   const procA = sa.map(s => /^DEFINE "(.*)" args/.exec(s.hat)).filter(Boolean).map(m => m[1]);
   const procB = sb.map(s => /^DEFINE "(.*)" args/.exec(s.hat)).filter(Boolean).map(m => m[1]);
   for (const p of procB) {

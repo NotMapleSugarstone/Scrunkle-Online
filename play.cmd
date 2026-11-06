@@ -1,8 +1,8 @@
 @echo off
-rem Runs the game on this computer and opens it in the browser. Saved edits to code, wording and
-rem assets show up in the open page by themselves.
-rem   play            the game
-rem   play online     the game plus a local room server, to test online play in two browser tabs
+rem 在本机运行游戏并在浏览器中打开。对代码、文案和
+rem 资源的修改会自动出现在已打开的页面中。
+rem   play            运行游戏
+rem   play online     运行游戏和本地房间服务器，以便在两个浏览器标签页中测试在线对战
 setlocal
 cd /d "%~dp0"
 

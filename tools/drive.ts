@@ -1,13 +1,13 @@
-// Drives the port through the game with a token script and records the input as a parity scenario.
-// Usage: npx tsx tools/drive.ts "<tokens>" [save-as] [seed]
-// Tokens:
-//   click:NAME[/w]  move the mouse onto a shown sprite named NAME (the topmost shown one), press and release it, then
-//                   run w frames (default 30)
-//   click:NAME#n    the same for the n-th shown target of that sprite, counting clones in creation order from 0
-//   KEY*h/w         tap KEY for h frames (default 3), then run w frames (default 20); 2-word keys use _ (left_arrow)
-//   hold:KEY/n      hold KEY for n frames
-//   wait/n          run n frames
-//   fuzz/n          random presses of both players' keys for n frames
+// 用令牌脚本驱动移植版游戏，并将输入记录为一致性场景。
+// 用法：npx tsx tools/drive.ts "<tokens>" [save-as] [seed]
+// 令牌：
+//   click:NAME[/w]  将鼠标移到名为 NAME 的显示角色上（最上层的显示角色），按下并释放，然后
+//                   运行 w 帧（默认 30）
+//   click:NAME#n    对该角色的第 n 个显示目标执行相同操作，克隆按创建顺序从 0 计数
+//   KEY*h/w         点按 KEY h 帧（默认 3），然后运行 w 帧（默认 20）；两词键名用 _（left_arrow）
+//   hold:KEY/n      按住 KEY n 帧
+//   wait/n          运行 n 帧
+//   fuzz/n          随机按下双方玩家的按键 n 帧
 import fs from 'node:fs';
 import path from 'node:path';
 import { createPort } from './lib/port.ts';
@@ -32,7 +32,7 @@ const held = new Set<string>();
 let mouse: { x: number; y: number; down: boolean } | undefined;
 let f = 0;
 
-/** Both players' keys as the game reads them now, without Pause, because random pauses would spend the run in the pause menu. */
+/** 游戏当前读取的双方玩家按键，不含暂停键，因为随机暂停会让整次运行耗在暂停菜单里。 */
 const controls = (): string[][] => [0, 1].map((seat) => seatKeys(rt, seat).filter((k, i) => k !== '' && ACTIONS[i] !== 'Pause'));
 const toName = (k: string) => (k.length === 1 ? k.toUpperCase() : k);
 
@@ -56,7 +56,7 @@ const press = (key: string, hold: number, wait: number) => {
   run(hold + wait);
 };
 
-/** A point inside the target's mask where the target is the topmost shown sprite, as a click would pick it. */
+/** 目标遮罩内的一个点，该处目标是按点击拾取方式可见的最上层角色。 */
 function clickPoint(t: Target): [number, number] | null {
   const b = rt.render.aabb(t);
   const xs: number[] = [], ys: number[] = [];
@@ -94,7 +94,7 @@ for (const tok of tokens) {
     const m = tok.match(/^hold:([^/]+)\/(\d+)$/)!;
     press(m[1].replace(/_/g, ' '), Number(m[2]), 0);
   } else if (tok.startsWith('answer:')) {
-    // answer:TEXT/w types TEXT into the open question, then runs w frames (default 20); _ stands for a space.
+    // answer:TEXT/w 在打开的问题框中输入 TEXT，然后运行 w 帧（默认 20）；_ 表示空格。
     const m = tok.match(/^answer:([^/]*)(?:\/(\d+))?$/)!;
     events.push({ f: f + 1, type: 'answer', text: m[1].replace(/_/g, ' ') });
     run(Number(m[2] ?? 20));

@@ -1,5 +1,5 @@
-// Round-trips every script body of a project through the assembler and reports the ones that do not print back the same.
-// Usage: node tools/sb3/asm-test.cjs <project folder> [more folders to learn input shapes from]
+// 将项目的每个脚本主体通过汇编器往返，并报告无法原样打印回来的脚本。
+// 用法：node tools/sb3/asm-test.cjs <project folder> [more folders to learn input shapes from]
 const path = require('path');
 const L = require('./sb3.cjs');
 const { learnShapes, asm } = require('./asm.cjs');
@@ -17,7 +17,7 @@ for (const t of p.targets) {
     if (!text.trim() || text.includes('?missing')) continue;
     try {
       const first = asm(p, t, ids, text);
-      // Print the new chain the same way scriptText does: hang it off a throwaway hat.
+      // 像 scriptText 一样打印新链：挂在一个临时帽子上。
       const hat = ids.next();
       t.blocks[hat] = { opcode: 'event_whenflagclicked', next: first, parent: null, inputs: {}, fields: {}, shadow: false, topLevel: true, x: 0, y: 0 };
       if (first) t.blocks[first].parent = hat;

@@ -1,21 +1,21 @@
-// Plays the simulation's sound events through Web Audio. Long sounds (the music) are kept on the
-// simulation's clock, so a track ends exactly when the game's "play until done" thinks it does
-// and loops without a gap or a cut, even when an online game waits or skips frames.
+// 通过 Web Audio 播放模拟中的声音事件。长声音（音乐）保持在
+// 模拟时钟上，因此曲目会在游戏的“play until done”认为结束时准确结束，
+// 即使在线游戏等待或跳帧，也能无缝循环，不会出现空隙或截断。
 import type { SoundEvent } from '../engine/sound-model.ts';
 import type { Runtime } from '../engine/runtime.ts';
 
 const FADE_S = 0.025;
-/** Sounds at least this long follow the simulation clock. */
+/** 至少这么长的声音会跟随模拟时钟。 */
 const FOLLOW_MIN_S = 4;
 const SHORT_SOUND_S = 20;
-/** Drift under this is timing noise and is left alone. */
+/** 小于此值的漂移属于计时噪声，不处理。 */
 const DEADBAND_S = 0.03;
-/** Drift over this is fixed by seeking rather than by playing slightly faster or slower. */
+/** 超过此值的漂移通过跳转修正，而不是稍微加快或放慢播放。 */
 const SEEK_S = 0.35;
-/** Playback rate change per second of drift, and the largest change (1% is about a sixth of a semitone). */
+/** 每秒漂移对应的播放速率变化，以及最大变化量（1% 约等于六分之一个半音）。 */
 const RATE_GAIN = 0.1;
 const RATE_MAX = 0.01;
-/** Presents in a row without the simulation advancing before following sounds pause. */
+/** 连续呈现这么多帧且模拟没有推进后，后续声音暂停。 */
 const HOLD_AFTER = 3;
 
 interface Voice {
@@ -26,12 +26,12 @@ interface Voice {
   serial: number;
   volume: number;
   follow: boolean;
-  /** Rate the simulation asked for. */
+  /** 模拟请求的播放速率。 */
   rate: number;
-  /** Buffer position in seconds at simulation time `simAt` (ms). */
+  /** 模拟时间 `simAt`（毫秒）时的缓冲区位置（秒）。 */
   simPos: number;
   simAt: number;
-  /** Buffer position in seconds at audio time `realAt`, and the rate actually playing. */
+  /** 音频时间 `realAt` 时的缓冲区位置（秒），以及实际播放速率。 */
   realPos: number;
   realAt: number;
   playRate: number;
@@ -55,24 +55,24 @@ export class AudioOut {
 
   private files: string[][] = [];
   private base = '';
-  /** Per sound: 0 not requested, 1 queued or loading, 2 loaded. */
+  /** 每个声音：0 未请求，1 已排队或加载中，2 已加载。 */
   private loadState: Uint8Array[] = [];
   private urgent: [number, number][] = [];
   private background: [number, number][] = [];
   private backgroundStarted = false;
   private loading = 0;
-  /** One decode per file, because sprites share sound files. */
+  /** 每个文件只解码一次，因为多个角色共享声音文件。 */
   private decoded = new Map<string, Promise<AudioBuffer>>();
-  /** Play events for sounds that had not loaded yet, by voice key. */
+  /** 尚未加载完成的声音的播放事件，按 voice key 索引。 */
   private pending = new Map<string, SoundEvent>();
   private onProgress?: (done: number, total: number) => void;
   private loaded = 0;
   private total = 0;
 
   /**
-   * Starts loading sounds in the background; the project has over a hundred megabytes of them.
-   * A sound the game plays before it arrives loads next. A long one then starts where the game's
-   * clock says it should be, and a short one plays only if it is still on time.
+   * 在后台开始加载声音；项目中的声音超过一百兆字节。
+   * 游戏在声音到达前播放它时，会优先加载该声音。长声音随后会从游戏
+   * 时钟指示的位置开始，短声音仅在仍来得及播放时才播放。
    */
   startLoading(rt: Runtime, base: string, onProgress?: (done: number, total: number) => void): void {
     this.base = base;
@@ -101,13 +101,13 @@ export class AudioOut {
 
   private durations: number[][] = [];
 
-  /** Resolves once every sound shorter than `seconds` has loaded or failed. */
+  /** 当所有短于 `seconds` 的声音加载完成或失败后完成。 */
   shortLoaded(seconds: number): Promise<void> {
     const ready = () => this.loadState.every((list, si) => list.every((st, i) => st === 2 || this.durations[si][i] >= seconds));
     return ready() ? Promise.resolve() : new Promise((r) => this.waiters.push(() => (ready() ? (r(), true) : false)));
   }
 
-  /** Each returns true once what it waits for has loaded, and is then dropped. */
+  /** 每个等待项在目标加载完成后返回 true，随后被移除。 */
   private waiters: (() => boolean)[] = [];
 
   private want(si: number, i: number): void {
@@ -154,7 +154,7 @@ export class AudioOut {
 
   private done: (() => void)[] = [];
 
-  /** Resolves once every sound has loaded or failed. */
+  /** 当所有声音加载完成或失败后完成。 */
   allLoaded(): Promise<void> {
     return this.loaded === this.total ? Promise.resolve() : new Promise((r) => this.done.push(r));
   }
@@ -182,7 +182,7 @@ export class AudioOut {
 
   private tap: MediaStreamAudioDestinationNode | null = null;
 
-  /** Everything the game plays, as a new stream, for recording a video. `endCapture` stops feeding it. */
+  /** 游戏播放的全部声音，作为用于录制视频的新音频流。`endCapture` 会停止向其中输入。 */
   capture(): MediaStream {
     this.endCapture();
     this.tap = this.ctx.createMediaStreamDestination();
@@ -196,8 +196,8 @@ export class AudioOut {
   }
 
   /**
-   * Stops every voice and starts the long sounds the simulation says are playing at their current place, as after
-   * a replay jumps to another frame. Short sounds that are already playing are left out.
+   * 停止所有声音，并从模拟当前所在的位置重新开始长声音，类似回放跳转到另一帧之后。
+   * 已经在播放的短声音不再重新开始。
    */
   resync(rt: Runtime): void {
     this.stopAll();
@@ -218,13 +218,13 @@ export class AudioOut {
     );
   }
 
-  /** Applies queued events and empties the queue. */
+  /** 应用排队的事件并清空队列。 */
   apply(events: SoundEvent[]): void {
     for (const e of events) this.handle(e);
     events.length = 0;
   }
 
-  /** Keeps following sounds on the simulation clock. Call once per presented frame with the simulation time. */
+  /** 让后续声音跟随模拟时钟。每个呈现帧用模拟时间调用一次。 */
   sync(simMs: number): void {
     const now = this.ctx.currentTime;
     this.still = simMs === this.lastSim ? this.still + 1 : 0;
@@ -232,7 +232,7 @@ export class AudioOut {
     for (const v of this.voices.values()) {
       if (!v.follow) continue;
       if (this.still >= HOLD_AFTER) {
-        // The game is waiting (for another player, usually), so the music waits too.
+        // 游戏正在等待（通常是等待另一名玩家），因此音乐也等待。
         if (!v.held) this.hold(v, now);
         continue;
       }
@@ -310,7 +310,7 @@ export class AudioOut {
     this.voices.set(key, v);
   }
 
-  /** Starts the voice's buffer at `offset` seconds through a fresh source and gain. */
+  /** 通过新的 source 和 gain，从 `offset` 秒处开始播放该声音的缓冲区。 */
   private startSource(v: Voice, offset: number, now: number, fadeIn: boolean): void {
     const src = this.ctx.createBufferSource();
     src.buffer = v.buffer;
@@ -351,12 +351,12 @@ export class AudioOut {
     fade(v.src, v.gain, now);
   }
 
-  /** Fades out one sound, used when a correction removes a sound that already started. */
+  /** 淡出一个声音，用于修正移除了已经开始的声音时。 */
   stopSound(sprite: number, sound: number): void {
     this.fadeOut(`${sprite}:${sound}`, this.ctx.currentTime);
   }
 
-  /** Stops every voice, used when a rollback replaces the timeline. */
+  /** 停止所有声音，用于回滚替换时间线时。 */
   stopAll(): void {
     const now = this.ctx.currentTime;
     this.pending.clear();
@@ -387,6 +387,6 @@ function fade(src: AudioBufferSourceNode, gain: GainNode, now: number): void {
   try {
     src.stop(now + FADE_S);
   } catch {
-    // already stopped
+    // 已停止
   }
 }

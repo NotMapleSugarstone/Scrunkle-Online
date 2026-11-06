@@ -1,6 +1,6 @@
-// Prints chosen stage variables and list items in the reference and the port at chosen frames, plus each
-// side's running threads. Needs tools/ref-server.ts running.
-// Usage: npx tsx tools/parity-vars.ts <scenario> <frame,frame,...> "<variable>|<list>#<item>,..."
+// 打印参考实现和移植版在指定帧的所选舞台变量和列表项，以及每侧
+// 正在运行的线程。需要 tools/ref-server.ts 正在运行。
+// 用法：npx tsx tools/parity-vars.ts <scenario> <frame,frame,...> "<variable>|<list>#<item>,..."
 import fs from 'node:fs';
 import path from 'node:path';
 import { serverPost } from './lib/ref-client.ts';

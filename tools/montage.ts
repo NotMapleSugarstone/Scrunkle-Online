@@ -1,5 +1,5 @@
-// Tiles saved frames into one image of half-size frames with their frame numbers, for looking at many frames at once.
-// Usage: npx tsx tools/montage.ts <out.png> <image> [image...]
+// 将保存的帧拼成一张半尺寸帧及帧号的图，便于一次查看许多帧。
+// 用法：npx tsx tools/montage.ts <out.png> <image> [image...]
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';

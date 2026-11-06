@@ -1,5 +1,5 @@
-// Renderer geometry that affects simulation state: bounds, fencing, stamp clipping and touching.
-// It works from costume metadata only, so it runs the same in a browser and in Node.
+// 影响模拟状态的渲染器几何：边界、围栏、图章裁剪和接触。
+// 它只使用造型元数据，因此在浏览器和 Node 中运行结果相同。
 import { STAGE_X, STAGE_Y, type SkinDef } from './defs.ts';
 import { cos, sin } from './dmath.ts';
 import { unpackMask, type PackedMask, type Silhouette } from './masks.ts';
@@ -18,7 +18,7 @@ export interface Rect {
 }
 
 
-/** Affine model transform of a drawable, as the renderer builds it. */
+/** 可绘制对象的仿射模型变换，按渲染器构建它的方式表示。 */
 interface Model {
   m0: number;
   m1: number;
@@ -30,7 +30,7 @@ interface Model {
 
 export class RenderModel {
   skins: SkinDef[];
-  /** Masks by skin, unpacked the first time a test needs them, because most costumes are never tested. */
+  /** 按皮肤索引的遮罩，在首次需要测试时解包，因为多数造型从不参与测试。 */
   private silhouettes: (Silhouette | undefined)[] = [];
   packed: (PackedMask | undefined)[] = [];
 
@@ -53,8 +53,8 @@ export class RenderModel {
   }
 
   /**
-   * Model transform with the original renderer's 32-bit float storage reproduced at every step,
-   * since bounds and fencing round differently otherwise.
+   * 每一步都复现原渲染器的 32 位浮点存储的模型变换，
+   * 否则边界和围栏的舍入结果会不同。
    */
   model(t: Target): Model {
     const f = Math.fround;
@@ -94,7 +94,7 @@ export class RenderModel {
     return { left: -x + m.m12, right: x + m.m12, top: y + m.m13, bottom: -y + m.m13 };
   }
 
-  /** Keeps at least a small part of the sprite on stage, like the original renderer. */
+  /** 与原渲染器一样，至少保留角色的一小部分在舞台上。 */
   fencedPosition(t: Target, x: number, y: number): [number, number] {
     const px = t.drawX;
     const py = t.drawY;
@@ -112,9 +112,8 @@ export class RenderModel {
   }
 
   /**
-   * Drawn bounds, as the original's getBounds gives them: the box around the costume's convex hull after
-   * the model transform, or the costume box when the sprite is hidden or has no opaque pixels.
-   * Like the original, it leaves the hull computed for later touching tests.
+   * 原版 getBounds 给出的绘制边界：经模型变换后造型凸包的外接框，
+   * 角色隐藏或没有不透明像素时为造型框。与原版一样，它会保留已计算的凸包供后续接触测试使用。
    */
   bounds(t: Target): Rect {
     const pts = t.visible ? this.hullPoints(t) : EMPTY;
@@ -123,12 +122,12 @@ export class RenderModel {
     return this.hullBounds(t, pts);
   }
 
-  /** Computes the hull as reading the bounds would, for callers that do not use the bounds. */
+  /** 按读取边界的方式计算凸包，供不使用边界的调用方使用。 */
   computeHull(t: Target): void {
     if (t.visible && this.hullPoints(t).length > 0) t.hullClean = true;
   }
 
-  /** The original's getFastBounds: the hull's box while the renderer holds the hull, else the costume box. */
+  /** 原版 getFastBounds：渲染器持有凸包时返回凸包外接框，否则返回造型框。 */
   fastBounds(t: Target): Rect {
     return t.hullClean ? this.hullBounds(t, this.hullPoints(t)) : this.aabb(t);
   }
@@ -140,7 +139,7 @@ export class RenderModel {
     const f = Math.fround;
     const out: Rect = { left: Infinity, right: -Infinity, bottom: Infinity, top: -Infinity };
     for (let i = 0; i < pts.length; i += 2) {
-      // Hull point to texture space, then through the model matrix; each result is stored as float32.
+      // 凸包点转到纹理空间，再经模型矩阵；每个结果都以 float32 存储。
       const u = f(0.5 + -pts[i] / w - 1 / w / 2);
       const v = f(pts[i + 1] / h - 0.5 + 1 / h / 2);
       const sx = f(u * m.m0 + v * m.m4 + m.m12);
@@ -154,8 +153,8 @@ export class RenderModel {
   }
 
   /**
-   * Hull candidates in skin units as flat x, y pairs: each pixel row's outermost opaque points, scanned
-   * the way the original does. The box around them equals the box around their convex hull.
+   * 以扁平的 x、y 对表示的皮肤单位凸包候选点：按原版方式扫描每一像素行最外侧的
+   * 不透明点。这些点的外接框等于其凸包的外接框。
    */
   private hullPoints(t: Target): number[] {
     const skinIndex = t.sprite.costumes[t.currentCostume].skin;
@@ -178,7 +177,7 @@ export class RenderModel {
         }
         if (x >= w) continue;
         pts.push(x, y);
-        // The right scan steps down from w - 1, which is fractional for most vector costumes.
+        // 右侧扫描从 w - 1 向下进行，对多数矢量造型来说这是小数。
         let right = x;
         for (let r = w - 1; r >= 0; r--) {
           p[0] = r / w;
@@ -197,7 +196,7 @@ export class RenderModel {
 
   private hullCache = new Map<string, number[]>();
 
-  /** The silhouette's linear touching test at a texture-space point, after the target's shape effects. */
+  /** 目标形状效果之后，在纹理空间某点对轮廓做线性接触测试。 */
   private linearAt(t: Target, sil: Silhouette, p: Float32Array): boolean {
     const q = new Float32Array([p[0], p[1]]);
     const fx = t.effects;
@@ -207,7 +206,7 @@ export class RenderModel {
     return alphaAt(sil, px, py) || alphaAt(sil, px + 1, py) || alphaAt(sil, px, py + 1) || alphaAt(sil, px + 1, py + 1);
   }
 
-  /** Position (x, y) moved just enough to keep the drawn bounds on stage, as the original's keepInFence does. */
+  /** 将位置 (x, y) 恰好移动到足以让绘制边界留在舞台上，与原版 keepInFence 一致。 */
   keepInFence(t: Target, x: number, y: number): [number, number] {
     const b = this.bounds(t);
     const dxT = x - t.x, dyT = y - t.y;
@@ -220,7 +219,7 @@ export class RenderModel {
     return [x + dx, y + dy];
   }
 
-  /** Stage-clamped, integer-snapped bounds; null when empty. Stamps are clipped to these. */
+  /** 限制在舞台内并取整的边界；为空时为 null。图章会裁剪到这些边界。 */
   touchingBounds(t: Target): Rect | null {
     const b = this.fastBounds(t);
     clampRect(b, -X_RIGHT, X_RIGHT, -Y_TOP, Y_TOP);
@@ -229,11 +228,11 @@ export class RenderModel {
     return b;
   }
 
-  // ---------------------------------------------------------------- touching
+  // ---------------------------------------------------------------- 接触
 
   /**
-   * What one target's point tests need: its silhouette and inverse model matrix, as float32. A touching test checks
-   * many points against the same targets, so this is worked out once per target per test.
+   * 单个目标的点测试所需数据：轮廓和逆模型矩阵，以 float32 表示。一次接触测试会用同一批目标
+   * 检查许多点，因此每个目标每次测试只计算一次。
    */
   private tester(t: Target): PointTester | null {
     const sil = this.silhouette(t.sprite.costumes[t.currentCostume].skin);
@@ -255,7 +254,7 @@ export class RenderModel {
 
   private lp = new Float32Array(2);
 
-  /** Stage point to skin texture coordinates and the silhouette test there, with the renderer's float32 storage. */
+  /** 将舞台点转换为皮肤纹理坐标，并在该处测试轮廓，使用渲染器的 float32 存储。 */
   private testPoint(p: PointTester, x: number, y: number): boolean {
     const inv = p.inv, lp = this.lp, sil = p.sil;
     const d = x * inv[3] + y * inv[7] + inv[15];
@@ -270,7 +269,7 @@ export class RenderModel {
     return alphaAt(sil, px, py) || alphaAt(sil, px + 1, py) || alphaAt(sil, px, py + 1) || alphaAt(sil, px + 1, py + 1);
   }
 
-  /** The original's effect transform: mosaic, pixelate, whirl, then fisheye, each stored as float32. */
+  /** 原版效果变换：马赛克、像素化、旋涡、鱼眼，每步都以 float32 存储。 */
   private effectTransform(t: Target, dst: Float32Array): void {
     if (t.effects.mosaic) {
       const m = Math.max(1, Math.min(Math.round((Math.abs(t.effects.mosaic) + 10) / 10), 512));
@@ -318,13 +317,13 @@ export class RenderModel {
     return sx > 99 && sx < 101 && sy > 99 && sy < 101;
   }
 
-  /** Touch test against a single stage point; visibility is not checked, as in the original. */
+  /** 对单个舞台点做接触测试；与原版一样不检查可见性。 */
   touchingPoint(t: Target, x: number, y: number): boolean {
     const p = this.tester(t);
     return p ? this.testPoint(p, x, y) : false;
   }
 
-  /** Pixel-level overlap between `t` and any visible candidate. */
+  /** `t` 与任一可见候选之间的像素级重叠。 */
   touchingTargets(t: Target, candidates: Target[]): boolean {
     const self = this.touchingBounds(t);
     if (!self) return false;
@@ -376,7 +375,7 @@ interface PointTester {
   nearest: boolean;
 }
 
-/** General 4x4 inverse in the same operation order as the renderer's matrix library, stored as float32. */
+/** 按渲染器矩阵库相同的运算顺序计算通用 4x4 逆矩阵，并以 float32 存储。 */
 function inverse4(m: Float32Array): Float32Array {
   const dst = new Float32Array(16);
   const m00 = m[0], m01 = m[1], m02 = m[2], m03 = m[3];

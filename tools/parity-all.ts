@@ -1,6 +1,6 @@
-// Runs tools/parity.ts over every scenario in tests/scenarios (or the given ones), a few at a
-// time, and prints a summary. Progress and results go to out/logs/parity-all.txt as runs finish.
-// Usage: npx tsx tools/parity-all.ts [parallel] [scenario names...]
+// 对 tests/scenarios 中的每个场景（或指定场景）运行 tools/parity.ts，每次几个，
+// 并打印摘要。进度和结果在运行完成时写入 out/logs/parity-all.txt。
+// 用法：npx tsx tools/parity-all.ts [parallel] [scenario names...]
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';

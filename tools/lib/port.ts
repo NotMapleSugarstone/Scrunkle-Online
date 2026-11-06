@@ -1,4 +1,4 @@
-// Runs the port headless and reports state in the same shape as the reference runner.
+// 无头运行移植版，并以与参考运行器相同的结构报告状态。
 import { Runtime } from '../../src/engine/runtime.ts';
 import { modules } from '../../src/game/generated/index.ts';
 import { skins } from '../../src/game/assets.ts';
@@ -110,7 +110,7 @@ export function fullState(rt: Runtime): FullState {
   };
 }
 
-/** Sorts each run of 'end' sound events, whose order between players carries no meaning. */
+/** 对每段连续的 'end' 声音事件排序，这些事件在玩家之间的顺序没有意义。 */
 export function normalizeSound(log: unknown[]): unknown[] {
   const out: unknown[] = [];
   let run: unknown[] = [];

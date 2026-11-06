@@ -1,6 +1,6 @@
-// Match replays. A recording keeps the whole game state from the frame a match starts, then every frame's input
-// until the match ends, so playing it back gives the same match. It also keeps a hash of the state every
-// 10 seconds, so playback can tell when it no longer matches.
+// 比赛回放。录像保存从比赛开始帧起的完整游戏状态，以及之后每一帧的输入，
+// 直到比赛结束，因此回放能重现同一场比赛。它还每 10 秒保存一次状态哈希，
+// 以便播放时判断何时不再一致。
 import type { PlayerInput } from '../engine/io.ts';
 import type { Runtime } from '../engine/runtime.ts';
 import { saveSnapshot, type Snapshot } from '../engine/snapshot.ts';
@@ -8,43 +8,43 @@ import { STATUS_DONE } from '../engine/thread.ts';
 import { snapshotHash } from '../net/rollback.ts';
 import { matchInfo, type MatchView } from '../game/replays.ts';
 
-/** What the Replays screen lists. */
+/** 回放界面列出的内容。 */
 export interface ReplayMeta {
   id: string;
-  /** A name the player gave it, shown instead of the fighters. */
+  /** 玩家给回放的名称，显示时替代角色名。 */
   name?: string;
   saved: number;
   mode: string;
   fighters: string[];
   stage: string;
-  /** Length in frames. */
+  /** 帧长度。 */
   frames: number;
   online: boolean;
-  /** Seat names, for online matches. */
+  /** 在线比赛的座位名称。 */
   names: string[];
-  /** The build fingerprint. A replay plays the same only in the build that saved it. */
+  /** 构建指纹。回放只有在保存它的构建中才能完全一致地播放。 */
   build: string;
 }
 
 export interface ReplayBody {
   format: 1;
-  /** The runtime's start time, which the date blocks read. */
+  /** 运行时开始时间，日期积木会读取。 */
   t0: number;
   start: Snapshot;
-  /** The input for every frame after the start, as [frames, inputs] runs. */
+  /** 开始后每一帧的输入，以 [帧数, 输入] 段保存。 */
   runs: [number, PlayerInput[]][];
-  /** [frames played, state hash] pairs. */
+  /** [已播放帧数, 状态哈希] 对。 */
   checks: [number, number][];
 }
 
 export type FinishedReplay = { meta: Omit<ReplayMeta, 'id' | 'saved'>; body: ReplayBody };
 
-/** The state the recorder reads after a frame. */
+/** 录制器在一帧后读取的状态。 */
 export interface FrameState extends MatchView {
   snapshot(): Snapshot;
 }
 
-/** The live runtime's state, for play on one computer. */
+/** 本地游玩时的实时运行时状态。 */
 export function runtimeState(rt: Runtime): FrameState {
   const def = rt.stage.sprite.def;
   return {
@@ -55,7 +55,7 @@ export function runtimeState(rt: Runtime): FrameState {
   };
 }
 
-/** A snapshot's state, for online matches, where the confirmed frames are behind the live runtime. */
+/** 在线比赛中的快照状态；确认帧落后于实时运行时。 */
 export function snapshotState(rt: Runtime, s: Snapshot): FrameState {
   const def = rt.stage.sprite.def;
   const index = rt.stage.sprite.index;
@@ -69,15 +69,15 @@ export function snapshotState(rt: Runtime, s: Snapshot): FrameState {
   };
 }
 
-/** A snapshot that can be stored: its pen commands are copied, because snapshots share the pen array. */
+/** 可保存的快照：复制画笔命令，因为快照共享画笔数组。 */
 function detached(s: Snapshot): Snapshot {
   return { ...s, penCmds: s.penCmds.slice(0, s.penLength) };
 }
 
 const CHECK_EVERY = 300;
-/** Matches longer than 30 minutes are not kept. */
+/** 超过 30 分钟的比赛不保留。 */
 const MAX_FRAMES = 30 * 60 * 30;
-/** Matches shorter than 10 seconds are not offered. */
+/** 短于 10 秒的比赛不提示保存。 */
 const MIN_FRAMES = 300;
 
 interface Recording {
@@ -90,9 +90,9 @@ interface Recording {
 }
 
 export class ReplayRecorder {
-  /** A match started, so an offer for the last one is out of date. */
+  /** 比赛开始，上一场的保存提示已过期。 */
   onStart: () => void = () => {};
-  /** A match ended and can be saved. */
+  /** 比赛结束，可以保存。 */
   onFinish: (r: FinishedReplay) => void = () => {};
   private rec: Recording | null = null;
   private wasMatch = false;
@@ -103,7 +103,7 @@ export class ReplayRecorder {
     private about: { build: string; online: boolean; names: string[] },
   ) {}
 
-  /** Call after every frame, in order, with the inputs that frame used and the state after it. */
+  /** 每帧按顺序调用，传入该帧使用的输入和帧后状态。 */
   frame(inputs: PlayerInput[], s: FrameState): void {
     const info = matchInfo(this.rt, s);
     const rec = this.rec;
@@ -145,26 +145,26 @@ export class ReplayRecorder {
   }
 }
 
-/** Every frame's inputs, expanded from the runs. */
+/** 从输入段展开的每一帧输入。 */
 export function replayFrames(body: ReplayBody): PlayerInput[][] {
   const out: PlayerInput[][] = [];
   for (const [n, inputs] of body.runs) for (let i = 0; i < n; i++) out.push(inputs);
   return out;
 }
 
-/** "Lemon vs Deli". */
+/** “Lemon vs Deli”。 */
 export function replayTitle(m: Pick<ReplayMeta, 'fighters'>): string {
   return m.fighters.join(' vs ');
 }
 
-/** The player's name for a replay, or its fighters. */
+/** 回放的玩家名称，或角色名。 */
 export function replayName(m: ReplayMeta): string {
   return m.name || replayTitle(m);
 }
 
 export const REPLAY_NAME_MAX = 60;
 
-/** "2:31" for a number of frames. */
+/** 帧数对应的“2:31”。 */
 export function clock(frames: number): string {
   const s = Math.floor(frames / 30);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

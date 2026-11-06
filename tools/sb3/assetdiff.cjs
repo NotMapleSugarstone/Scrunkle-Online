@@ -1,4 +1,4 @@
-// Compares costumes and sounds per sprite by name and by asset id.
+// 按名称和资源 id 比较每个角色的造型和声音。
 const fs = require('fs');
 const [, , aPath, bPath, verbose] = process.argv;
 const A = JSON.parse(fs.readFileSync(aPath, 'utf8'));

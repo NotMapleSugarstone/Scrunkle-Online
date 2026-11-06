@@ -1,16 +1,16 @@
-// Local keyboard and mouse state, in the key names and stage coordinates the game uses.
+// 本地键盘和鼠标状态，使用游戏中的键名与舞台坐标。
 import { browserKeyToName } from '../engine/io.ts';
 import { STAGE_H, STAGE_W, STAGE_X, STAGE_Y } from '../engine/defs.ts';
 
 export class LocalInput {
   keys = new Set<string>();
-  /** Keys pressed since the last sample, so a tap shorter than a frame still reaches the game. */
+  /** 自上次采样以来按下的键，使短于一帧的轻点也能到达游戏。 */
   private tapped = new Set<string>();
   mouse = { x: 0, y: 0, down: false };
   mouseDirty = false;
-  /** When false, key events are ignored (for example while a text box has focus). */
+  /** 为 false 时忽略按键事件（例如文本框获得焦点时）。 */
   enabled = true;
-  /** A key that Escape also presses, such as the pause menu's key, or null. */
+  /** Escape 也会按下的键，例如暂停菜单的键，或 null。 */
   escapeAs: string | null = null;
 
   constructor(private stageEl: HTMLElement) {
@@ -25,7 +25,7 @@ export class LocalInput {
     window.addEventListener('keyup', (e) => {
       const name = e.key === 'Escape' && this.escapeAs ? this.escapeAs : browserKeyToName(e.key);
       if (name) this.keys.delete(name);
-      // Shifted characters can release under a different key name, so match on the physical key too.
+      // 带 Shift 的字符可能在释放时使用不同键名，因此也按物理键匹配。
       if (e.code.startsWith('Key')) this.keys.delete(e.code.slice(3));
       if (e.code.startsWith('Digit')) this.keys.delete(e.code.slice(5));
     });
@@ -59,7 +59,7 @@ export class LocalInput {
     });
   }
 
-  /** Keys for one game frame: those held now plus those tapped since the previous call. */
+  /** 一帧游戏使用的按键：当前按住的键加上上次调用后轻点的键。 */
   sampleKeys(): string[] {
     for (const k of this.keys) this.tapped.add(k);
     const out = [...this.tapped];
@@ -67,30 +67,30 @@ export class LocalInput {
     return out;
   }
 
-  /** Presses a key for one frame, as the pause menu's buttons do. */
+  /** 模拟按下某键一帧，如同暂停菜单按钮。 */
   tap(key: string): void {
     this.tapped.add(key);
   }
 
-  /** Returns sampled keys whose frame did not run, so the next sample includes them. */
+  /** 返回所在帧未运行的已采样按键，使下次采样仍包含它们。 */
   retap(keys: string[]): void {
     for (const k of keys) this.tapped.add(k);
   }
 
-  /** Set by a press, so a click released before the next sample still reaches the game. */
+  /** 由按下事件设置，使下次采样前释放的点击仍能到达游戏。 */
   private clicked = false;
 
-  /** The pointer for one game frame, or undefined when it has not changed since the previous call. */
+  /** 一帧游戏使用的指针；自上次调用后未变化时为 undefined。 */
   sampleMouse(): { x: number; y: number; down: boolean } | undefined {
     if (!this.mouseDirty) return undefined;
     const m = { ...this.mouse, down: this.mouse.down || this.clicked };
-    // A click released within one frame reads as down for that frame and up on the next.
+    // 在一帧内释放的点击在该帧视为按下，下一帧视为释放。
     this.mouseDirty = this.clicked && !this.mouse.down;
     this.clicked = false;
     return m;
   }
 
-  /** Returns a sampled pointer whose frame did not run, so the next sample repeats it. */
+  /** 返回所在帧未运行的已采样指针，使下次采样重复它。 */
   remouse(m: { down: boolean }): void {
     if (m.down && !this.mouse.down) this.clicked = true;
     this.mouseDirty = true;

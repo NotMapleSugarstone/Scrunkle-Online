@@ -1,10 +1,10 @@
-// Talks to tools/ref-server.ts. Runs queue on the server and can take many minutes before it answers,
-// longer than fetch's header timeout, so this uses a plain request with no timeout.
+// 与 tools/ref-server.ts 通信。运行在服务器上排队，响应可能要等数分钟，
+// 超过 fetch 的响应头超时，因此使用无超时的普通请求。
 import http from 'node:http';
 
 export const SERVER = `http://127.0.0.1:${process.env.REF_PORT ?? 8793}`;
 
-/** JSON that keeps NaN, the infinities, -0 and undefined, which states from the reference often hold. */
+/** 保留 NaN、无穷、-0 和 undefined 的 JSON，参考实现的状态经常包含这些值。 */
 export function encodeSpecial(v: unknown): string {
   return JSON.stringify(v, function (this: unknown, k: string, x: unknown) {
     const raw = (this as Record<string, unknown>)[k];

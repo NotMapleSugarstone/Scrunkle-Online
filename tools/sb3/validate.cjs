@@ -1,4 +1,4 @@
-// Structural and reference checks for an unpacked Scratch 3 project folder. Prints errors and warnings, exits 1 on errors.
+// 对解包的 Scratch 3 项目文件夹进行结构和引用检查。打印错误和警告，有错误时退出码 1。
 const fs = require('fs');
 const path = require('path');
 const { resolveRef, stageOf, isBlock } = require('./sb3.cjs');
@@ -17,7 +17,7 @@ const hats = new Set(['event_whenflagclicked', 'event_whenbroadcastreceived', 'c
 for (const t of p.targets) {
   const B = t.blocks;
   const where = (id) => `${t.name}/${id}`;
-  // Graph integrity.
+  // 图完整性。
   const claimed = new Map();
   for (const [id, b] of Object.entries(B)) {
     if (!isBlock(b)) {
@@ -46,7 +46,7 @@ for (const t of p.targets) {
     if (b.topLevel && !b.shadow && !hats.has(b.opcode) && !b.opcode.startsWith('procedures_prototype')) W(`${where(id)}: loose ${b.opcode}`);
     if (b.comment !== undefined && (typeof b.comment !== 'string' || !(t.comments || {})[b.comment])) E(`${where(id)}: bad comment ${b.comment}`);
   }
-  // Data references.
+  // 数据引用。
   const ref = (id, kind, name, rid) => {
     const r = resolveRef(p, t, kind, name, rid);
     if (!r || r.id !== rid) E(`${where(id)}: ${kind} ${name} (${rid}) does not resolve by id`);
@@ -67,7 +67,7 @@ for (const t of p.targets) {
       if (v[0] === 13) ref(id, 'list', v[1], v[2]);
     }
   }
-  // Procedures.
+  // 过程。
   const protos = new Map(), defs = new Map();
   for (const [id, b] of Object.entries(B)) {
     if (!isBlock(b)) continue;
@@ -88,7 +88,7 @@ for (const t of p.targets) {
     if (pr.mutation.argumentids !== b.mutation.argumentids) E(`${where(id)}: argument ids differ from prototype "${pc}"`);
   }
   for (const pc of protos.keys()) if (!called.has(pc)) W(`${t.name}: "${pc}" is never called`);
-  // Variables.
+  // 变量。
   for (const dict of ['variables', 'lists']) {
     const names = new Map();
     for (const [id, v] of Object.entries(t[dict])) {
@@ -97,7 +97,7 @@ for (const t of p.targets) {
       if (!t.isStage && Object.values(st[dict]).some(g => g[0] === v[0])) E(`${t.name}: local ${v[0]} shadows a global`);
     }
   }
-  // Assets.
+  // 资源。
   for (const kind of ['costumes', 'sounds']) {
     const seen = new Set();
     for (const a of t[kind]) {
@@ -108,7 +108,7 @@ for (const t of p.targets) {
     }
   }
   if (t.currentCostume < 0 || t.currentCostume >= t.costumes.length) E(`${t.name}: currentCostume out of range`);
-  // Literal costume and sound menus that name nothing.
+  // 未指向任何内容的字面量造型和声音菜单。
   const cos = new Set(t.costumes.map(c => c.name)), snd = new Set(t.sounds.map(s => s.name));
   for (const [id, b] of Object.entries(B)) {
     if (!isBlock(b) || !b.shadow) continue;
@@ -124,7 +124,7 @@ for (const t of p.targets) {
     }
   }
 }
-// Monitors.
+// 监视器。
 for (const m of p.monitors || []) {
   if (!['data_variable', 'data_listcontents'].includes(m.opcode)) continue;
   const kind = m.opcode === 'data_variable' ? 'variables' : 'lists';

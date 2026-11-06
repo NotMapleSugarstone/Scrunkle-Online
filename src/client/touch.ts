@@ -1,19 +1,19 @@
-// On-screen controls for touch screens: a joystick for movement and controller-style buttons for
-// the rest. They show on touch devices while a game runs, beside the stage in landscape and below
-// it in portrait, and hide while a controller is in use. Players choose which button does what in
-// the lobby's controls menu.
+// 触屏上的屏幕控制：用于移动的摇杆和控制器风格的按钮，
+// 游戏运行时在触屏设备上显示；横屏位于舞台旁，竖屏位于舞台下方，
+// 使用控制器时隐藏。玩家可在大厅的控制菜单中设置每个按钮的功能。
+// 触屏设备显示期间，游戏运行时控制显示在舞台旁。
 import { ACTIONS, DEFAULT_TOUCH_BUTTONS, loadTouchButtons } from './controls.ts';
 import { DOWN, LEFT, RIGHT, UP, type Pads } from './pads.ts';
 import { STORAGE_PREFIX } from '../game/page.ts';
 import { actionLabel } from './net-text.ts';
 
-/** Share of the joystick's radius the thumb must move before it counts as a direction. */
+/** 摇杆半径中拇指必须移动的比例，超过后才算方向。 */
 const STICK_DEADZONE = 0.3;
-/** Direction threshold on each axis: cos 67.5 degrees, so the eight directions get equal sectors. */
+/** 每个轴的方向阈值：cos 67.5 度，使八个方向均分。 */
 const AXIS = 0.383;
-/** In menus the thumb must move further, since each release of a direction moves the selection. */
+/** 菜单中拇指必须移动得更远，因为每次释放方向都会移动选择。 */
 const MENU_DEADZONE = 0.5;
-/** In menus the current axis is kept until the other leads it by this much, so a thumb near 45 degrees does not flip between them. */
+/** 菜单中保持当前轴，直到另一轴领先这么多，避免 45 度附近的拇指在两轴间跳动。 */
 const MENU_STICKINESS = 0.25;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
@@ -23,12 +23,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 }
 
-/** Keeps a pointer's events on `target` while it is down. A pointer that already lifted cannot be captured, which is harmless. */
+/** 指针按下期间将其事件保留在 `target` 上。已经抬起的指针无法捕获，但也无妨。 */
 function capture(target: Element, id: number): void {
   try {
     target.setPointerCapture(id);
   } catch {
-    // The pointer is no longer active.
+    // 指针已不再活动。
   }
 }
 
@@ -45,17 +45,17 @@ function loadChoice(): boolean | null {
 
 export class TouchControls {
   private root: HTMLDivElement;
-  /** Detected: a touch screen is the main pointer, a touch happened, or a controller took over. */
+  /** 检测结果：触屏是主指针、发生过触摸，或控制器接管。 */
   private touchDevice = matchMedia('(pointer: coarse)').matches;
-  /** The player's own choice from the lobby, which wins over detection once made. */
+  /** 玩家在大厅中的选择；一旦设置就优先于检测结果。 */
   private choice = loadChoice();
   private playing = false;
   private dirs = new Set<number>();
-  /** The buttons in place order, each with the action it presses. */
+  /** 按位置顺序排列的按钮及其按下的动作。 */
   private slots: { b: HTMLButtonElement; action: number }[] = [];
-  /** Called whenever the controls switch on or off, for the lobby's toggle. */
+  /** 控制开启或关闭时调用，供大厅开关使用。 */
   onChange: (on: boolean) => void = () => {};
-  /** True while the game shows a menu, where the joystick gives one direction at a time. */
+  /** 游戏显示菜单时为 true，此时摇杆一次只给出一个方向。 */
   menuMode: () => boolean = () => false;
 
   constructor(parent: HTMLElement, private pads: Pads, private relayout: () => void) {
@@ -69,7 +69,7 @@ export class TouchControls {
         this.update();
       }
     });
-    // A real controller's first input hides the controls. A device that only claims to be one never sends any.
+    // 真正控制器的首次输入会隐藏触屏控制。只声称自己是控制器的设备不会发送输入。
     this.pads.onController = () => {
       this.touchDevice = false;
       this.update();
@@ -78,12 +78,12 @@ export class TouchControls {
     this.update();
   }
 
-  /** Whether the controls show during a game. */
+  /** 游戏期间是否显示控制。 */
   get enabled(): boolean {
     return this.choice ?? this.touchDevice;
   }
 
-  /** True while the controls show, so the page leaves room for them. */
+  /** 控制显示时为 true，页面会为其留出空间。 */
   get active(): boolean {
     return this.enabled && this.playing;
   }
@@ -93,13 +93,13 @@ export class TouchControls {
     this.update();
   }
 
-  /** Records the player's choice, which then wins over detection. */
+  /** 记录玩家选择，之后优先于检测结果。 */
   setChoice(on: boolean): void {
     this.choice = on;
     try {
       localStorage.setItem(CHOICE_KEY, on ? '1' : '0');
     } catch {
-      // Storage may be blocked.
+      // 存储可能被阻止。
     }
     this.update();
   }
@@ -120,7 +120,7 @@ export class TouchControls {
     this.dirs = next;
   }
 
-  /** A floating joystick: the base centers where the thumb lands and the knob follows it. */
+  /** 浮动摇杆：底座在拇指落点居中，旋钮跟随拇指。 */
   private stick(): HTMLElement {
     const zone = el('div', 'touch-stick');
     const base = el('div', 'touch-stick-base');
@@ -146,7 +146,7 @@ export class TouchControls {
         const ux = (e.clientX - cx) / dist;
         const uy = (e.clientY - cy) / dist;
         if (menu) {
-          // Menus act on the last direction released, so they get exactly one direction at a time.
+          // 菜单只响应最后释放的方向，因此一次只给出一个方向。
           const ax = Math.abs(ux);
           const ay = Math.abs(uy);
           let across = ax >= ay;
@@ -195,7 +195,7 @@ export class TouchControls {
     return zone;
   }
 
-  /** Gives the buttons their actions, in the place order of `DEFAULT_TOUCH_BUTTONS`. */
+  /** 按 `DEFAULT_TOUCH_BUTTONS` 的位置顺序为按钮分配动作。 */
   setButtons(names: string[]): void {
     this.pads.releaseAll();
     this.slots.forEach((s, i) => {
@@ -210,7 +210,7 @@ export class TouchControls {
     b.tabIndex = -1;
     const slot = { b, action: -1 };
     this.slots.push(slot);
-    // The action pressed is the one released, even when the buttons change in between.
+    // 按下时记录的动作在释放时生效，即使期间按钮发生变化。
     let held = -1;
     const up = (e: PointerEvent) => {
       e.stopPropagation();
@@ -234,7 +234,7 @@ export class TouchControls {
     return b;
   }
 
-  /** Four buttons in a diamond, like a controller's face buttons. */
+  /** 菱形排列的四个按钮，类似控制器的面键。 */
   private face(): HTMLElement {
     const face = el('div', 'touch-face');
     face.append(this.button('top'), this.button('left'), this.button('right'), this.button('bottom'));

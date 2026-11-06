@@ -1,7 +1,7 @@
-// Runs a scenario on a freshly loaded reference a few frames at a time and logs how long each chunk takes,
-// to find where the original is slow or stuck. Progress goes to out/logs/ref-progress.txt.
-// Creating out/logs/ref-progress.stop ends the run after the current chunk.
-// Usage: npx tsx tools/ref-progress.ts <scenario-file> [chunk frames] [stage variable]
+// 在刚加载的参考实现上分批运行场景，并记录每块耗时，
+// 以找出原版慢或卡住的位置。进度写入 out/logs/ref-progress.txt。
+// 创建 out/logs/ref-progress.stop 会在当前块结束后结束运行。
+// 用法：npx tsx tools/ref-progress.ts <scenario-file> [chunk frames] [stage variable]
 import fs from 'node:fs';
 import path from 'node:path';
 import { openReference, ROOT } from './lib/reference.ts';

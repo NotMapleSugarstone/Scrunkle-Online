@@ -1,5 +1,5 @@
-// The question after a match: save a replay of it in this browser or not.
-// The game goes on underneath, and the buttons never take keyboard focus.
+// 比赛结束后的询问：是否在此浏览器中保存回放。
+// 游戏继续在下方运行，按钮永远不会获得键盘焦点。
 import { clock, type FinishedReplay } from './replay.ts';
 import { saveReplay } from './replay-store.ts';
 import { currentFormat, currentText } from './net-text.ts';
@@ -44,7 +44,7 @@ export class ReplayOffer {
     this.el.hidden = false;
   }
 
-  /** Drops the question, as when the next match starts. */
+  /** 关闭询问，例如下一场比赛开始时。 */
   clear(): void {
     this.pending = null;
     this.el.hidden = true;

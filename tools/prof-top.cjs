@@ -1,5 +1,5 @@
-// Prints the functions with the most self time in a V8 .cpuprofile, and the most total time by call stack.
-// Usage: node tools/prof-top.cjs <file.cpuprofile> [count]
+// 打印 V8 .cpuprofile 中自身耗时最多的函数，以及按调用栈统计总耗时最多的函数。
+// 用法：node tools/prof-top.cjs <file.cpuprofile> [count]
 const fs = require('fs');
 const prof = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const count = Number(process.argv[3] || 30);
@@ -17,7 +17,7 @@ for (const [id, us] of self) {
   all += us;
   const n = byId.get(id);
   selfBy.set(label(n), (selfBy.get(label(n)) || 0) + us);
-  // Total time: count each function once per sample stack.
+  // 总耗时：每个函数在每个采样栈中计一次。
   const seen = new Set();
   for (let c = id; c !== undefined; c = parent.get(c)) {
     const l = label(byId.get(c));

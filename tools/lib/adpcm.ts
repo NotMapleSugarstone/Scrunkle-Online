@@ -1,6 +1,6 @@
-// Converts IMA ADPCM wav files to 16-bit PCM wav files. Browsers cannot decode ADPCM, which the original player
-// decodes itself, so these sounds would otherwise be silent. The decoder follows the original player's: mono only,
-// the same sample count, and the same clamping, so every 16-bit sample matches what it plays.
+// 将 IMA ADPCM wav 文件转换为 16 位 PCM wav。浏览器无法解码 ADPCM，原播放器
+// 会自行解码，否则这些声音会静音。解码器遵循原播放器：仅单声道、
+// 相同采样数以及相同的钳制，使每个 16 位采样与其播放结果一致。
 
 const STEPS = [
   7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143, 157, 173,
@@ -19,14 +19,14 @@ function chunk(buf: Buffer, id: string): Buffer | null {
   return null;
 }
 
-/** True for a RIFF wav whose format chunk says IMA ADPCM. */
+/** 对格式块声明为 IMA ADPCM 的 RIFF wav 返回 true。 */
 export function isAdpcm(buf: Buffer): boolean {
   if (buf.length < 12 || buf.toString('latin1', 0, 4) !== 'RIFF' || buf.toString('latin1', 8, 12) !== 'WAVE') return false;
   const fmt = chunk(buf, 'fmt ');
   return !!fmt && fmt.length >= 2 && fmt.readUInt16LE(0) === 0x11;
 }
 
-/** The PCM wav that plays the same samples as an IMA ADPCM wav. */
+/** 播放与 IMA ADPCM wav 相同采样的 PCM wav。 */
 export function adpcmToPcm(buf: Buffer): Buffer {
   const fmt = chunk(buf, 'fmt ')!;
   const data = chunk(buf, 'data')!;

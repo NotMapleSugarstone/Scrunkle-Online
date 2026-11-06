@@ -1,24 +1,23 @@
-// Each player's own keys, kept in this browser, and the keys the game reads for each seat. The game reads its keys
-// from the `!G_Keybinds` list: items 1 to 8 are Player 1's buttons, items 9 to 16 Player 2's, and items 17 and 18
-// change the song in menus. Online, each player's presses are translated to their own seat's keys before they are
-// sent, so both players can use the same keys.
+// 每位玩家自己的按键保存在此浏览器中，游戏按座位读取按键。游戏从 `!G_Keybinds` 列表读取按键：
+// 第 1 至 8 项是玩家 1 的按钮，第 9 至 16 项是玩家 2 的，第 17、18 项
+// 用于在菜单中换歌。在线时，每位玩家的按键会在发送前转换为各自座位的按键，
+// 因此两位玩家可以使用相同按键。
 import { keyArgToName } from '../engine/io.ts';
 import type { Value } from '../engine/cast.ts';
 import type { Runtime } from '../engine/runtime.ts';
 import { STORAGE_PREFIX } from '../game/page.ts';
 
-/** The game's buttons in the order of each player's part of `!G_Keybinds`. */
+/** 游戏按钮，按每位玩家在 `!G_Keybinds` 中的顺序排列。 */
 export const ACTIONS = ['Up', 'Down', 'Left', 'Right', 'Attack', 'Special', 'Shield', 'Pause'];
-/** The keys the game starts with for each seat, as the engine names them. */
+/** 各座位初始按键，使用引擎中的名称。 */
 export const DEFAULT_KEYS: string[][] = [
   ['up arrow', 'down arrow', 'left arrow', 'right arrow', 'N', 'M', 'B', 'V'],
   ['W', 'S', 'A', 'D', 'F', 'G', 'H', 'R'],
 ];
 
 /**
- * Buttons of the standard controller layout, by button index, and the action each presses. A attacks and selects in
- * menus, B uses a special and goes back, X and Y jump, the shoulders and triggers shield, and Back and Start pause.
- * The D-pad and the left stick move.
+ * 标准控制器布局的按钮及其对应动作。A 攻击并在菜单中选择，B 使用必杀并返回，
+ * X 和 Y 跳跃，肩键和扳机防御，Back 和 Start 暂停。方向键和左摇杆负责移动。
  */
 export const PAD_BUTTONS: [number, string][] = [
   [0, 'Attack'],
@@ -33,7 +32,7 @@ export const PAD_BUTTONS: [number, string][] = [
   [9, 'Pause'],
 ];
 
-/** The touch controls' buttons in place order: the face buttons top, left, right and bottom, then the small one. */
+/** 触屏按钮按位置排列：面键的上、左、右、下，然后是小按钮。 */
 export const DEFAULT_TOUCH_BUTTONS = ['Up', 'Shield', 'Special', 'Attack', 'Pause'];
 
 const KEYBINDS = '!G_Keybinds';
@@ -41,7 +40,7 @@ const BUTTONS = ACTIONS.length;
 const STORE_KEY = `${STORAGE_PREFIX}.controls`;
 const TOUCH_KEY = `${STORAGE_PREFIX}.touchButtons`;
 
-/** The game's key list, which the in-game controls menu edits. */
+/** 游戏按键列表，游戏内控制菜单会编辑它。 */
 function keybinds(rt: Runtime): Value[] | undefined {
   const prop = rt.stage.sprite.def.listNames?.[KEYBINDS];
   return prop === undefined ? undefined : rt.stage.l[prop];
@@ -49,7 +48,7 @@ function keybinds(rt: Runtime): Value[] | undefined {
 
 const keyName = (v: Value | undefined): string => (v === '' || v === undefined ? '' : keyArgToName(v));
 
-/** The keys the game reads for a seat right now, in `ACTIONS` order. */
+/** 游戏当前为某座位读取的按键，按 `ACTIONS` 顺序。 */
 export function seatKeys(rt: Runtime, seat: number): string[] {
   const list = keybinds(rt);
   if (!list) return DEFAULT_KEYS[seat] ?? [];
@@ -59,8 +58,8 @@ export function seatKeys(rt: Runtime, seat: number): string[] {
 }
 
 /**
- * Replaces each pressed key of the player's own controls with the seat's key for the same button.
- * Other pressed keys pass through, except keys the seat uses, which only count when bound in `own`.
+ * 将玩家自己控制中的每个按键替换为该座位同一按钮的按键。
+ * 其他按键原样传递，但座位使用的键只有在 `own` 中绑定时才生效。
  */
 export function translateKeys(pressed: string[], own: string[], seat: string[]): string[] {
   const out = new Set<string>();
@@ -71,21 +70,21 @@ export function translateKeys(pressed: string[], own: string[], seat: string[]):
   return [...out];
 }
 
-/** Makes this player's own keys Player 1's for play on one computer, where the in-game controls menu can still change them. */
+/** 在单机游玩时把此玩家自己的按键设为玩家 1 的按键，游戏内控制菜单仍可修改。 */
 export function applyToPlayerOne(rt: Runtime, keys: string[]): void {
   const list = keybinds(rt);
   if (!list) return;
-  // The game stores letters in lower case, as its controls menu writes them.
+  // 游戏以小写保存字母，与其控制菜单一致。
   for (let b = 0; b < BUTTONS; b++) list[b] = keys[b].length === 1 ? keys[b].toLowerCase() : keys[b];
 }
 
-/** The keys this player set under Controls, or null when they never set any. */
+/** 玩家在“控制”中设置的按键，从未设置时为 null。 */
 export function savedControls(): string[] | null {
   try {
     const v = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null');
     if (Array.isArray(v) && v.length === BUTTONS && v.every((k) => typeof k === 'string')) return v;
   } catch {
-    // Storage may be blocked or hold an older format.
+    // 存储可能被阻止，或保存的是旧格式。
   }
   return null;
 }
@@ -98,17 +97,17 @@ export function saveControls(keys: string[]): void {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(keys));
   } catch {
-    // Storage may be blocked.
+    // 存储可能被阻止。
   }
 }
 
-/** Which action each touch button has, from `DEFAULT_TOUCH_BUTTONS` in the player's order. */
+/** 每个触屏按钮的功能，按玩家顺序对应 `DEFAULT_TOUCH_BUTTONS`。 */
 export function loadTouchButtons(): string[] {
   try {
     const v = JSON.parse(localStorage.getItem(TOUCH_KEY) ?? 'null');
     if (Array.isArray(v) && v.length === DEFAULT_TOUCH_BUTTONS.length && DEFAULT_TOUCH_BUTTONS.every((a) => v.includes(a))) return v;
   } catch {
-    // Storage may be blocked.
+    // 存储可能被阻止。
   }
   return [...DEFAULT_TOUCH_BUTTONS];
 }
@@ -117,6 +116,6 @@ export function saveTouchButtons(buttons: string[]): void {
   try {
     localStorage.setItem(TOUCH_KEY, JSON.stringify(buttons));
   } catch {
-    // Storage may be blocked.
+    // 存储可能被阻止。
   }
 }

@@ -1,6 +1,6 @@
-// Checks that restoring a snapshot and re-simulating reproduces the straight run exactly,
-// including through a JSON round trip of the snapshot (used to send state to a peer).
-// Usage: npx tsx tools/rollback-test.ts <scenario-file> [maxRollback]
+// 检查恢复快照并重新模拟能否精确重现直接运行，
+// 包括快照经过 JSON 往返（用于向对端发送状态）的情况。
+// 用法：npx tsx tools/rollback-test.ts <scenario-file> [maxRollback]
 import fs from 'node:fs';
 import path from 'node:path';
 import { canon, createPort, digest, fullState, InputTimeline, type Scenario } from './lib/port.ts';
@@ -16,7 +16,7 @@ straight.greenFlag();
 const tl = new InputTimeline(sc.events);
 const inputs: ReturnType<InputTimeline["inputsFor"]>[] = [];
 const expected: string[] = [];
-// The hash online peers compare also covers what the digest leaves out, such as thread ids.
+// 在线对端比较的哈希还覆盖摘要省略的内容，例如线程 id。
 const expectedHash: number[] = [];
 for (let f = 1; f <= sc.frames; f++) {
   inputs[f] = tl.inputsFor(f);
@@ -25,7 +25,7 @@ for (let f = 1; f <= sc.frames; f++) {
   expectedHash[f] = snapshotHash(saveSnapshot(straight));
 }
 
-/** Prints what differs between a straight run at frame `g` and the given state. */
+/** 打印第 `g` 帧直接运行与给定状态之间的差异。 */
 function explain(g: number, got: ReturnType<typeof fullState>): void {
   const ref = createPort(sc.seed);
   ref.greenFlag();
@@ -66,7 +66,7 @@ while (f < sc.frames) {
     console.log(`MISMATCH at frame ${f} after ${rollbacks} rollbacks`);
     process.exit(1);
   }
-  // Roll back a random distance now and then, and simulate forward again.
+  // 不时随机回滚一段距离，然后再次向前模拟。
   if (rng.next() < 0.2 && f > maxBack) {
     const back = 1 + Math.floor(rng.next() * maxBack);
     const target = f - back;

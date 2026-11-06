@@ -1,12 +1,12 @@
-// Prints every script of an extracted sb3 project.json as indented pseudocode, one file per target.
+// 将解压的 sb3 project.json 中每个脚本打印为缩进伪代码，每个目标一个文件。
 const fs = require('fs');
 const path = require('path');
 
 
-// With the Stage given, variable and list names come from their ids, because the name copies in blocks can be stale.
+// 指定舞台后，变量和列表名称来自其 id，因为积木中的名称副本可能已过时。
 function makePrinter(target, stage) {
   const blocks = target.blocks;
-  // Names the assembler could not delimit (spaces, parentheses, commas) print inside braces.
+  // 汇编器无法定界的名称（空格、括号、逗号）打印在花括号中。
   const nm = (n) => (/[\s(),{}]/.test(n) ? `{${n}}` : n);
   function dataName(dict, name, id) {
     const v = target[dict][id] || (stage && stage[dict][id]);

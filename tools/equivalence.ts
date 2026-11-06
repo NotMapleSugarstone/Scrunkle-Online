@@ -1,9 +1,9 @@
-// Plays scenarios in the original runtime with two versions of the project and checks that every frame shows, plays
-// and holds the same things. Use it to confirm that a change that removes or rewrites blocks keeps the game's behavior.
-// Usage: npx tsx tools/equivalence.ts <before.sb3> <after.sb3> [scenario names, files or folders...] [--ignore name,name]
-// With no scenarios it plays every scenario in tests/scenarios. tests/equivalence holds longer random-click runs.
-// Progress goes to out/equivalence.progress.txt and the report to out/equivalence.txt. The file out/equivalence.stop
-// ends the run after the current chunk with a partial report.
+// 在原运行时中用两个版本的项目播放场景，检查每一帧显示、播放
+// 和持有的内容都相同。用于确认删除或重写积木的修改不会改变游戏行为。
+// 用法：npx tsx tools/equivalence.ts <before.sb3> <after.sb3> [场景名称、文件或文件夹...] [--ignore name,name]
+// 未指定场景时播放 tests/scenarios 中的所有场景。tests/equivalence 保存更长的随机点击运行。
+// 进度写入 out/equivalence.progress.txt，报告写入 out/equivalence.txt。文件 out/equivalence.stop
+// 会在当前分块结束后结束运行，并生成部分报告。
 import fs from 'node:fs';
 import path from 'node:path';
 import { openReference, ROOT, type RefSession } from './lib/reference.ts';
@@ -15,7 +15,7 @@ const ignore = ignoreAt >= 0 ? args.splice(ignoreAt, 2)[1].split(',') : [];
 const [before, after, ...names] = args;
 if (!before || !after) throw new Error('usage: npx tsx tools/equivalence.ts <before.sb3> <after.sb3> [scenario names...] [--ignore name,name]');
 const dir = path.join(ROOT, 'tests', 'scenarios');
-// A name is a scenario in tests/scenarios, and a path ending in .json or a folder names scenario files directly.
+// 名称是 tests/scenarios 中的场景；以 .json 结尾的路径或文件夹则直接指定场景文件。
 const files = (names.length ? names : [dir]).flatMap((n) => {
   if (n.endsWith('.json')) return [path.resolve(n)];
   if (fs.existsSync(n) && fs.statSync(n).isDirectory()) return fs.readdirSync(n).filter((f) => f.endsWith('.json')).map((f) => path.resolve(n, f));
@@ -40,7 +40,7 @@ function progress(): void {
     `estimated left: ${Number.isNaN(left) ? 'unknown' : `${left.toFixed(0)} s`}`, ...lines].join('\n') + '\n');
 }
 
-/** The names of the parts of two observed states that differ. */
+/** 两个观察状态中不同部分的名称。 */
 function differences(a: any, b: any): string[] {
   const out: string[] = [];
   for (const k of ['rng', 'rngCalls', 'answer']) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) out.push(`${k}: ${JSON.stringify(a[k])} vs ${JSON.stringify(b[k])}`);
@@ -86,7 +86,7 @@ try {
       progress();
     }
     if (mismatch) {
-      // Replay both up to the first differing frame and name what differs there.
+      // 将两者重放到第一个不同的帧，并指出那里不同的内容。
       await Promise.all(refs.map((r) => r.page.evaluate((s) => (window as any).H.start({ seed: s.seed, username: s.username ?? '' }), { seed: sc.seed, username: sc.username })));
       for (let done = 0; done < mismatch; done += CHUNK) {
         const n = Math.min(CHUNK, mismatch - done);

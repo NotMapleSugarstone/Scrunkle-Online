@@ -1,7 +1,7 @@
-// Copies costume and sound files into public/assets for the browser build, replacing what was there.
-// Vector costumes are written as the original loader normalized them (viewBox, injected fonts). The injected fonts
-// are most of the bytes and repeat across hundreds of costumes, so each is written once to public/assets/fonts and
-// the costume keeps a `cbfont:<hash>` token that the page swaps back before drawing (src/render/webgl.ts).
+// 将造型和声音文件复制到浏览器构建的 public/assets，替换原有内容。
+// 矢量造型按原加载器规范化后的形式写入（viewBox、注入的字体）。注入的字体
+// 占大部分字节，并在数百个造型中重复，因此每种字体只写入 public/assets/fonts 一次，
+// 造型保留 `cbfont:<hash>` 标记，页面在绘制前会换回字体（src/render/webgl.ts）。
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

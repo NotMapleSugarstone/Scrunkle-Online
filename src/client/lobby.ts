@@ -1,5 +1,5 @@
-// The screen shown before the game starts: play offline, or host or join an online room. Also the
-// status line and waiting panel shown during an online game.
+// 游戏开始前的界面：离线游玩，或创建/加入在线房间。
+// 也包含在线游戏期间的状态行和等待面板。
 import type { SeatInfo } from '../net/protocol.ts';
 import type { LinkState } from '../net/mesh.ts';
 import { cleanName, NAME_MAX, SEATS } from '../net/protocol.ts';
@@ -18,16 +18,16 @@ import type { DisplayMode } from '../render/webgl.ts';
 const NAME_KEY = `${STORAGE_PREFIX}.name`;
 const DELAY_KEY = `${STORAGE_PREFIX}.delay`;
 const EXPORT_KEY = `${STORAGE_PREFIX}.replayExport`;
-/** Set once the player accepts the online notice, which then never shows again in this browser. */
+/** 玩家接受在线提示后设置，此浏览器中不再显示该提示。 */
 const ONLINE_NOTICE_KEY = `${STORAGE_PREFIX}.onlineNotice`;
 
-/** The last download choices: a video or a replay file, and the video's quality. */
+/** 上次下载选项：视频或回放文件，以及视频质量。 */
 function loadExport(): { kind: 'mp4' | 'file'; quality: VideoQuality } {
   try {
     const v = JSON.parse(localStorage.getItem(EXPORT_KEY) ?? 'null');
     if ((v?.kind === 'mp4' || v?.kind === 'file') && v.quality in VIDEO_QUALITIES) return v;
   } catch {
-    // Storage may be blocked.
+    // 存储可能被阻止。
   }
   return { kind: 'mp4', quality: '720p' };
 }
@@ -37,7 +37,7 @@ function renderOption(b: HTMLButtonElement, label: string, on: boolean): void {
   b.setAttribute('aria-pressed', String(on));
 }
 
-/** A button that shows only an icon, with its name in the tooltip. */
+/** 只显示图标的按钮，名称放在提示框中。 */
 function iconButton(node: IconNode, label: string, cls = ''): HTMLButtonElement {
   const b = el('button', `lobby-option lobby-icon ${cls}`.trim());
   b.title = label;
@@ -47,8 +47,8 @@ function iconButton(node: IconNode, label: string, cls = ''): HTMLButtonElement 
 }
 
 /**
- * Turns a list row into a question with Delete and Keep, keeping `name` on the left. Pages cannot count on
- * the browser's own dialogs, which some embedded browsers never show.
+ * 将列表行变为带有“删除”和“保留”的问题，并把 `name` 留在左侧。页面不能依赖
+ * 浏览器自带对话框，因为某些嵌入式浏览器从不显示它们。
  */
 function askDelete(li: HTMLLIElement, name: HTMLElement, question: string, remove: () => Promise<void>, keep: () => void): void {
   const ask = el('div', 'row-ask');
@@ -62,14 +62,14 @@ function askDelete(li: HTMLLIElement, name: HTMLElement, question: string, remov
   no.focus();
 }
 
-/** "Online versus, Kitty Forest, 2:31, Oct 20", after the fighters when the replay has a name. */
+/** “在线对战，Kitty Forest，2:31，10 月 20 日”，回放有名称时显示在角色之后。 */
 function replayDetail(m: ReplayMeta): string {
   const kind = `${m.online ? currentText('onlinePrefix') : ''}${modeLabel(m.mode).toLowerCase()}`;
   const when = new Date(m.saved).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return [m.name ? replayTitle(m) : '', `${kind[0].toUpperCase()}${kind.slice(1)}`, m.stage, clock(m.frames), when].filter(Boolean).join(', ');
 }
 
-/** Everything about a replay, for the tooltip on its row. */
+/** 回放的全部信息，用于其行的提示框。 */
 function replayAbout(m: ReplayMeta): string {
   const who = m.online && m.names.length ? `\n${currentText('players')}: ${m.names.join(', ')}` : '';
   const when = new Date(m.saved).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -83,7 +83,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
-/** A made-up name, which online play accepts without a Scratch account. */
+/** 在线游玩可接受、无需 Scratch 账号的随机名称。 */
 function randomName(): string {
   return `player${String(Math.floor(Math.random() * 10_000)).padStart(4, '0')}`;
 }
@@ -100,7 +100,7 @@ function store(key: string, v: string): void {
   try {
     localStorage.setItem(key, v);
   } catch {
-    // Storage may be blocked.
+    // 存储可能被阻止。
   }
 }
 
@@ -110,17 +110,17 @@ export interface LobbyHandlers {
   join(name: string, code: string): void;
   start(delay: number): void;
   leave(): void;
-  /** The player switched the touch controls on or off. */
+  /** 玩家开启或关闭了触屏控制。 */
   touchControls(on: boolean): void;
-  /** The player changed which touch button does what, in the place order of `DEFAULT_TOUCH_BUTTONS`. */
+  /** 玩家更改了触屏按钮的功能，按 `DEFAULT_TOUCH_BUTTONS` 的位置顺序。 */
   touchButtons(names: string[]): void;
-  /** The player chose a replay to watch. */
+  /** 玩家选择要观看的回放。 */
   watch(id: string): void;
-  /** The player chose to download a replay as a video. */
+  /** 玩家选择将回放下载为视频。 */
   recordVideo(id: string, quality: VideoQuality): void;
-  /** The player asked for the next display mode. */
+  /** 玩家请求下一个显示模式。 */
   nextDisplay(): void;
-  /** The player switched "Actually wear hats" on or off. */
+  /** 玩家开启或关闭了“实际戴上帽子”。 */
   wearHats(on: boolean): void;
 }
 
@@ -154,7 +154,7 @@ export class Lobby {
   private touchOn = false;
   private controls = loadControls();
   private keyButtons: HTMLButtonElement[] = [];
-  /** The button waiting for a key, or -1. */
+  /** 正在等待按键的按钮索引，或 -1。 */
   private capturing = -1;
   private controlsHeading: HTMLDivElement;
   private controlsTabs: HTMLDivElement;
@@ -165,12 +165,12 @@ export class Lobby {
   private touchEdit: HTMLDivElement;
   private touchPicks: HTMLButtonElement[] = [];
   private touchButtons = loadTouchButtons();
-  /** The touch button tapped first, waiting for the one to swap with, or -1. */
+  /** 先点选的触屏按钮，等待与另一个交换，或 -1。 */
   private picked = -1;
-  /** Which controllers the browser sees, while the controls screen shows. */
+  /** 控制界面显示时，浏览器能看到的控制器。 */
   private padNote: HTMLParagraphElement;
   private padTimer: ReturnType<typeof setInterval> | null = null;
-  /** The screen the controls screen returns to. */
+  /** 控制界面返回的界面。 */
   private backTo: 'menu' | 'room' = 'menu';
   private replaysView: HTMLDivElement;
   private replaysBtn: HTMLButtonElement;
@@ -189,7 +189,7 @@ export class Lobby {
   private noticeText: HTMLParagraphElement;
   private noticeOk: HTMLButtonElement;
   private noticeBack: HTMLButtonElement;
-  /** The Host or Join waiting for the player to accept the online notice. */
+  /** 等待玩家接受在线提示的创建或加入操作。 */
   private afterNotice: (() => void) | null = null;
 
   constructor(parent: HTMLElement, private h: LobbyHandlers) {
@@ -208,7 +208,7 @@ export class Lobby {
     this.nameIn.autocapitalize = 'off';
     this.nameIn.title = this.t('nameHint');
     this.nameIn.value = cleanName(load(NAME_KEY, '')) || randomName();
-    // Characters a Scratch username cannot hold are dropped as they are typed or pasted.
+    // Scratch 用户名不允许的字符会在输入或粘贴时被移除。
     this.nameIn.addEventListener('input', () => {
       const v = this.nameIn.value;
       const clean = cleanName(v);
@@ -271,7 +271,7 @@ export class Lobby {
       row.append(el('span', '', actionLabel(action)), key);
       grid.append(row);
     });
-    // The touch buttons in their places on the screen.
+    // 屏幕上的触屏按钮位置。
     this.touchEdit = el('div', 'touch-edit');
     const touchFace = el('div', 'touch-edit-face');
     const touchSmall = el('div', 'touch-edit-small');
@@ -285,7 +285,7 @@ export class Lobby {
     touchPad.append(touchFace, touchSmall);
     this.touchEdit.append(el('p', 'lobby-note', currentText('tapSwap')), touchPad);
     this.renderTouch();
-    // While the touch controls are on, two tabs take the heading's place, so the screen fits without scrolling.
+    // 触屏控制开启时，两个标签页会占据标题位置，使界面无需滚动即可放下。
     this.controlsHeading = el('div', 'lobby-heading', currentText('yourControls'));
     this.controlsTabs = el('div', 'controls-tabs');
     const tab = (label: string, which: 'keys' | 'touch'): HTMLButtonElement => {
@@ -348,7 +348,7 @@ export class Lobby {
     replayActions.append(upload, replaysDone, replayPick);
     this.replaysView.append(el('div', 'lobby-heading', currentText('replays')), this.replayList, replayActions);
 
-    // Shown before the first Host or Join in this browser.
+    // 在此浏览器中首次创建或加入前显示。
     this.noticeView = el('div', 'lobby-controls');
     this.noticeView.hidden = true;
     this.noticeOk = el('button', 'primary', this.t('understand'));
@@ -395,7 +395,7 @@ export class Lobby {
     this.langBtn = el('button', 'lobby-option');
     this.langBtn.addEventListener('click', () => this.setLanguage(this.lang === 'zh' ? 'en' : 'zh'));
     this.renderLanguage();
-    // The footer keeps these out of the panel's way on short screens.
+    // 页脚会把这些选项移开，避免在矮屏幕上挡住面板。
     const footer = el('div', 'lobby-footer');
     const left = el('div', 'lobby-footer-left');
     left.append(this.replaysBtn, this.touchBtn, this.displayBtn, this.hatsBtn, this.langBtn);
@@ -420,7 +420,7 @@ export class Lobby {
       store(DELAY_KEY, this.delayIn.value);
       this.h.start(Number(this.delayIn.value));
     });
-    // Keys typed into the lobby must not reach the game underneath.
+    // 输入大厅的按键不能传到下方游戏。
     this.root.addEventListener('keydown', (e) => e.stopPropagation());
     this.root.addEventListener('keyup', (e) => e.stopPropagation());
   }
@@ -489,7 +489,7 @@ export class Lobby {
     return name;
   }
 
-  /** Disables the play buttons while the first images load, with the progress as status. */
+  /** 首张图片加载期间禁用游玩按钮，并显示进度。 */
   setLoading(loading: boolean, text = ''): void {
     this.loading = loading;
     for (const b of this.menu.querySelectorAll('button')) b.disabled = loading;
@@ -523,7 +523,7 @@ export class Lobby {
     this.status.textContent = text;
   }
 
-  /** The asset warm-up count under the menu, gone once everything has loaded. */
+  /** 菜单下方的素材预热计数，全部加载后消失。 */
   setProgress(done: number, total: number): void {
     const text = done >= total ? '' : currentFormat('loadingAssets', { percent: Math.floor((done / total) * 100) });
     if (this.progress.textContent !== text) this.progress.textContent = text;
@@ -533,7 +533,7 @@ export class Lobby {
     this.show('menu');
   }
 
-  /** Shows the lobby again after a game or a replay, on the menu or the Replays screen. */
+  /** 游戏或回放结束后再次显示大厅，位于菜单或回放界面。 */
   showStart(view: 'menu' | 'replays'): void {
     this.root.hidden = false;
     if (view === 'replays') this.openReplays();
@@ -541,7 +541,7 @@ export class Lobby {
     void this.refreshReplays();
   }
 
-  /** Runs an online action, after the player accepts the online notice if they have not yet. */
+  /** 执行在线操作；若玩家尚未接受在线提示，则先显示提示。 */
   private online(action: () => void): void {
     if (load(ONLINE_NOTICE_KEY, '') === '1') {
       action();
@@ -614,14 +614,14 @@ export class Lobby {
     return li;
   }
 
-  /** Turns a replay's row into the download choices: a video or a replay file, and the video's quality. */
+  /** 将回放行变为下载选项：视频或回放文件，以及视频质量。 */
   private askDownload(m: ReplayMeta, li: HTMLLIElement, name: HTMLElement): void {
     const pick = loadExport();
     const keep = () => {
       try {
         localStorage.setItem(EXPORT_KEY, JSON.stringify(pick));
       } catch {
-        // Storage may be blocked.
+        // 存储可能被阻止。
       }
     };
     const kinds = el('div', 'export-kind');
@@ -667,7 +667,7 @@ export class Lobby {
     li.replaceChildren(name, kinds, quality, go, cancel);
   }
 
-  /** Puts a text box in place of a replay's name. Enter or leaving the box saves, Escape cancels, and an empty name brings back the fighters. */
+  /** 用文本框替换回放名称。按 Enter 或离开文本框会保存，Escape 取消，名称为空则恢复角色名。 */
   private rename(m: ReplayMeta, name: HTMLElement): void {
     const box = el('input', 'replay-rename');
     box.maxLength = REPLAY_NAME_MAX;
@@ -680,7 +680,7 @@ export class Lobby {
       if (save) await renameReplay(m.id, box.value.trim());
       await this.refreshReplays();
     };
-    // The game's key handler takes Space and the arrow keys, so key presses stop at the box.
+    // 游戏的按键处理器会占用空格和方向键，因此按键事件在文本框处停止。
     box.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') void finish(true);
@@ -700,7 +700,7 @@ export class Lobby {
     this.padTimer = setInterval(() => this.renderPads(), 500);
   }
 
-  /** Names the controllers the browser lists, so a player can tell whether theirs is seen at all. */
+  /** 列出浏览器能看到的控制器名称，让玩家知道是否检测到了自己的控制器。 */
   private renderPads(): void {
     const all = listControllers();
     const used = all.filter((c) => c.used).map((c) => c.name);
@@ -720,7 +720,7 @@ export class Lobby {
     this.touchTabBtn.setAttribute('aria-pressed', String(touch));
   }
 
-  /** Starts waiting for a key for one button, or stops waiting when `i` is -1. */
+  /** 开始等待某个按钮的按键；`i` 为 -1 时停止等待。 */
   private capture(i: number): void {
     this.capturing = i;
     this.renderKeys();
@@ -751,7 +751,7 @@ export class Lobby {
     });
   }
 
-  /** Shows whether the touch controls are on. They decide that from the saved choice or the device. */
+  /** 显示触屏控制是否开启。开启状态由已保存的选择或设备决定。 */
   setTouch(on: boolean): void {
     this.touchOn = on;
     renderOption(this.touchBtn, this.t('touchControls'), on);
@@ -768,7 +768,7 @@ export class Lobby {
     renderOption(this.hatsBtn, this.t('wearHats'), on);
   }
 
-  /** Picks the first touch button of a swap, or swaps its action with the one picked before. */
+  /** 选择触屏按钮交换的第一个按钮，或与之前选中的按钮交换功能。 */
   private pickTouch(i: number): void {
     if (this.picked < 0 || this.picked === i) {
       this.picked = this.picked === i ? -1 : i;
@@ -883,7 +883,7 @@ export class Hud {
     this.onAction = onClick;
   }
 
-  /** The panel over the stage while the game waits for a player, or nothing for a null title. */
+  /** 在线游戏等待玩家时覆盖舞台的面板；标题为 null 时隐藏。 */
   waiting(title: string | null, text = '', button: { label: string; onClick: () => void } | null = null): void {
     this.wait.hidden = title === null;
     if (title === null) return;

@@ -1,5 +1,5 @@
-// Times a saved replay frame by frame: simulation, saving a snapshot and loading one, as a rollback session does.
-// Usage: npx tsx tools/replay-perf.ts <file.meow>
+// 逐帧测量保存的回放：模拟、保存快照和加载快照，与回滚会话相同。
+// 用法：npx tsx tools/replay-perf.ts <file.meow>
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';

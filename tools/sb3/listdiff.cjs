@@ -1,4 +1,4 @@
-// For each Stage list both projects have, prints the rows each side lacks, and for apostrophe-packed rows the tokens each side lacks.
+// 对两个项目共有的每个舞台列表，打印各方缺少的行；对用撇号打包的行，打印各方缺少的令牌。
 const fs = require('fs');
 const [, , aPath, bPath, only] = process.argv;
 const A = JSON.parse(fs.readFileSync(aPath, 'utf8'));

@@ -1,5 +1,5 @@
-// The lobby: one object for the whole deployment that hands out room names and join codes.
-// It caps live codes overall and by address, and the rooms it opens in a day.
+// 大厅：整个部署共用的一个对象，负责分配房间名和加入码。
+// 它限制同时有效的加入码总数和按地址数量，也限制每日开放的房间数。
 import { DurableObject } from 'cloudflare:workers';
 import type { QueueReply } from '../../src/net/protocol';
 import type { Env } from './env';
@@ -15,12 +15,12 @@ interface Day {
   rooms: number;
 }
 
-/** A code only needs to last until everyone has joined. */
+/** 加入码只需维持到所有人都加入。 */
 const CODE_MS = 30 * 60 * 1000;
 const MAX_CODES = 2000;
 const CODES_PER_ADDRESS = 3;
 const ROOMS_PER_DAY = 300;
-/** No vowels and no look-alike characters, so a code read aloud arrives as written. */
+/** 不含元音，也不含易混淆字符，使口头读出的加入码能按原样输入。 */
 const CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ23456789';
 
 const own = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);

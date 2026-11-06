@@ -1,12 +1,12 @@
-// Finds the head in every fighter costume, for the page's "Actually wear hats" option.
-// Each character's Idle costume gives the head: a disc under the point where the hat sits. Every other costume of
-// that character is searched for the disc, turned and mirrored, and the hat point and turn follow the best match.
-// Usage: npx tsx tools/hat-anchors.ts [--only <character>] [--sheets <dir>]
-// --sheets draws every costume with a hat where its match puts it, one image per character. HAT_COSTS=1 prints each
-// costume's match cost.
-// Writes src/game/hat-anchors.json. Each costume name maps to [x, y, turn, mirrored]: the hat point in costume units
-// from the rotation center with y up, the hat's turn in degrees clockwise, and 1 when the head faces the other way.
-// Without --only it runs one child process per character, several at once.
+// 查找每个斗士造型的头部，用于页面的“实际戴上帽子”选项。
+// 每个角色的 Idle 造型给出头部：帽子落点下方的一个圆盘。该角色的其他造型
+// 会搜索这个圆盘，经过旋转和镜像，并让帽子点和转向跟随最佳匹配。
+// 用法：npx tsx tools/hat-anchors.ts [--only <character>] [--sheets <dir>]
+// --sheets 会按匹配位置画出戴着帽子的每个造型，每个角色一张图。HAT_COSTS=1 打印每个
+// 造型的匹配代价。
+// 写入 src/game/hat-anchors.json。每个造型名称映射到 [x, y, turn, mirrored]：帽子点在造型单位中
+// 相对旋转中心的位置（y 向上）、帽子顺时针转向角度，以及头部朝向反面时为 1。
+// 不带 --only 时，每个角色运行一个子进程，同时运行多个。
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,34 +15,34 @@ import { readPng, writePng, type Image } from './lib/png.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(ROOT, 'src/game/hat-anchors.json');
-/** Hat height above the fighter's position in the game's own code, before the per-character offset. */
+/** 游戏自身代码中帽子相对斗士位置的高度，尚未应用按角色的偏移。 */
 const HAT_BASE = 52;
-/** A match costing more than this (mean channel difference, 0 to 1) takes the hat point of a frame from the same move. */
+/** 代价高于此值（平均通道差，0 到 1）的匹配会采用同一动作中某一帧的帽子点。 */
 const MAX_COST = 0.3;
-/** Coarse search turns, in degrees. */
+/** 粗搜索的转向角度。 */
 const COARSE_STEP = 15;
-/** Cost added per degree of turn, so a hat stays upright unless the head is clearly tilted. */
+/** 每度转向增加的代价，使帽子保持竖直，除非头部明显倾斜。 */
 const TURN_COST = 0.00015;
 /**
- * How far (units) the hat point may move to rest on the head's outline, the band (units each side) it checks, and the
- * share of the band that must be solid. A pole or a glow above a head fills too little of the band to lift the hat.
+ * 帽子点最多可移动多远（单位）以落在头部轮廓上、它检查的带状区域（每侧单位数），以及
+ * 该区域中必须为实心的比例。头顶的杆或光晕填充比例太小，不足以抬起帽子。
  */
 const SETTLE_MAX = 8;
 const SETTLE_BAND = 4;
 const SETTLE_FILL = 0.6;
 /**
- * How far below the top of the hair the hat point sits, in head radii: the median of the game's own hat points. A
- * game hat point outside the range takes the median instead.
+ * 帽子点在头发顶部下方多远，以头部半径计：游戏自身帽子点的中位数。
+ * 超出范围的游戏帽子点采用该中位数。
  */
 const SINK = 0.45;
 const SINK_RANGE = [0.3, 0.7];
 
 /**
- * Hand fixes from reviewing the sheets, in `tools/hat-fixes.json`. A character can set `sink` (units below the top of
- * the head), `radius` (head radius in units), `dx` and `dy` (units to move its Idle hat point right and up) and `maxTurn`
- * (degrees either way the hat may turn, 0 for a head that never tilts). A frame
- * maps to a hat point [x, y, turn, mirrored], to another costume's name to copy, to { dx, dy, turn } to adjust it, or
- * to { top: sink, wide } to stand the hat upright that many units into the top of the costume's solid shape (see `topOf`).
+ * 检查图后手工修正的值，保存在 `tools/hat-fixes.json`。角色可设置 `sink`（头顶下方单位数）、
+ * `radius`（头部半径，单位）、`dx` 和 `dy`（将 Idle 帽子点向右和向上移动的单位数）以及
+ * `maxTurn`（帽子可向任一侧转动的角度，0 表示头部从不倾斜）。帧可映射到帽子点
+ * [x, y, turn, mirrored]、另一造型名称（复制它）、{ dx, dy, turn }（调整它），或
+ * { top: sink, wide }（将帽子竖直放入造型实心形状顶部那么多单位处，见 `topOf`）。
  */
 interface Fixes {
   characters: Record<string, { sink?: number; radius?: number; dx?: number; dy?: number; maxTurn?: number }>;
@@ -58,10 +58,10 @@ const args = process.argv.slice(2);
 const opt = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
 const only = opt('--only');
 const sheets = opt('--sheets');
-/** A child process writes its entries here instead of to the table. */
+/** 子进程将条目写到这里，而不是写入表格。 */
 const part = opt('--part');
 
-/** Premultiplied RGBA, 0 to 1, at `scale` pixels per costume unit. */
+/** 每造型单位 `scale` 像素处的预乘 RGBA，取值 0 到 1。 */
 interface Layer { w: number; h: number; px: Float32Array; scale: number }
 
 function premultiply(img: Image, scale: number): Layer {
@@ -88,7 +88,7 @@ function half(l: Layer): Layer {
 
 const loadImage = (skin: SkinDef) => readPng(fs.readFileSync(path.join(ROOT, 'public/assets', skin.file)));
 
-/** Costume image layers at 1 and 0.5 pixels per unit, from a bitmap at 2 pixels per unit. */
+/** 每单位 1 和 0.5 像素的造型图像层，来自每单位 2 像素的位图。 */
 function pyramid(skin: SkinDef): [Layer, Layer] {
   const l1 = half(premultiply(loadImage(skin), skin.res));
   return [l1, half(l1)];
@@ -96,7 +96,7 @@ function pyramid(skin: SkinDef): [Layer, Layer] {
 
 const alphaAt = (l: Layer, x: number, y: number) => (x < 0 || y < 0 || x >= l.w || y >= l.h ? 0 : l.px[(y * l.w + x) * 4 + 3]);
 
-/** The head disc of a reference layer: offsets from its center in pixels (y down) and the pixel values. */
+/** 参考层的头部圆盘：相对其中心的像素偏移（y 向下）及像素值。 */
 interface Disc { dx: Float32Array; dy: Float32Array; v: Float32Array; n: number; r: number }
 
 function disc(l: Layer, cx: number, cy: number, r: number): Disc {
@@ -111,7 +111,7 @@ function disc(l: Layer, cx: number, cy: number, r: number): Disc {
   return { dx: Float32Array.from(dx), dy: Float32Array.from(dy), v: Float32Array.from(v), n: dx.length, r };
 }
 
-/** Disc offsets turned clockwise by `turn` degrees after an optional mirror, rounded down to whole pixels. */
+/** 圆盘偏移经可选镜像后顺时针旋转 `turn` 度，并向下取整到整像素。 */
 function turned(d: Disc, turn: number, mirror: boolean): Int32Array {
   const c = Math.cos((turn * Math.PI) / 180), s = Math.sin((turn * Math.PI) / 180), out = new Int32Array(d.n * 2);
   for (let i = 0; i < d.n; i++) {
@@ -122,7 +122,7 @@ function turned(d: Disc, turn: number, mirror: boolean): Int32Array {
   return out;
 }
 
-/** Mean channel difference between the disc and the target with the disc centered on pixel (tx, ty); Infinity past `limit`. */
+/** 圆盘中心位于像素 (tx, ty) 时圆盘与目标的平均通道差；超过 `limit` 时为 Infinity。 */
 function cost(d: Disc, offs: Int32Array, t: Layer, tx: number, ty: number, limit: number): number {
   const stop = limit * d.n * 4;
   let sum = 0;
@@ -141,11 +141,11 @@ function cost(d: Disc, offs: Int32Array, t: Layer, tx: number, ty: number, limit
 
 interface Match { x: number; y: number; turn: number; mirror: boolean; cost: number }
 
-/** A front view matches either way round, so a mirror has to win clearly. */
+/** 正面视图无论朝向哪边都能匹配，因此镜像必须明显胜出。 */
 const MIRROR_COST = 0.01;
 const extra = (turn: number, mirror: boolean) => Math.abs(turn) * TURN_COST + (mirror ? MIRROR_COST : 0);
 
-/** The best place for the head disc in a target, as the disc center in level-1 pixels. */
+/** 头部圆盘在目标中的最佳位置，以 1 级像素中的圆盘中心表示。 */
 function search(ref: { coarse: Disc; fine: Disc }, [t1, t2]: [Layer, Layer], maxTurn = 180): Match {
   const seeds: Match[] = [];
   for (const mirror of [false, true]) {
@@ -187,8 +187,8 @@ function search(ref: { coarse: Disc; fine: Disc }, [t1, t2]: [Layer, Layer], max
 }
 
 /**
- * How far up from (x, y) the head's outline is, in pixels along `up`: the band across that line is walked up from
- * inside the head, and the outline is its last solid step before a gap. Null when the band is never solid.
+ * 从 (x, y) 沿 `up` 向上多远是头部轮廓（像素）：从头部内侧沿该线向上走带状区域，
+ * 轮廓是遇到空隙前的最后一个实心位置。带状区域从未实心时返回 null。
  */
 function outline(l: Layer, x: number, y: number, ux: number, uy: number): number | null {
   const band = SETTLE_BAND * l.scale;
@@ -204,18 +204,18 @@ function outline(l: Layer, x: number, y: number, ux: number, uy: number): number
   return last;
 }
 
-/** The topmost opaque row in the columns around x, or -1. */
+/** x 周围各列中最上方的不透明行，或 -1。 */
 function topAt(l: Layer, x: number, reach: number): number {
   for (let y = 0; y < l.h; y++) for (let dx = -reach; dx <= reach; dx++) if (alphaAt(l, Math.round(x) + dx, y) > 0.5) return y;
   return -1;
 }
 
-/** The hat point in a reference layer (pixels, y down): the game's own, or the top of the head when that one misses it. */
+/** 参考层中的帽子点（像素，y 向下）：游戏自身的点，或当它没落在头上时的头顶。 */
 function hatPoint(l: Layer, skin: SkinDef, hatY: number): { x: number; y: number; own: boolean } {
   const own = { x: skin.rcx * l.scale, y: (skin.rcy - hatY) * l.scale };
   const top = topAt(l, own.x, 4);
   if (top >= 0 && own.y >= top - 8 && own.y <= top + 20) return { ...own, own: true };
-  // The head is the opaque mass in the top 25 units, and the hat sits a little into its middle.
+  // 头部是顶部 25 单位内的不透明主体，帽子落在其中部稍下方。
   const first = topAt(l, l.w / 2, Math.ceil(l.w / 2));
   let lo = Infinity, hi = -Infinity;
   for (let y = first; y < Math.min(l.h, first + 25); y++) for (let x = 0; x < l.w; x++) if (alphaAt(l, x, y) > 0.5) {
@@ -226,7 +226,7 @@ function hatPoint(l: Layer, skin: SkinDef, hatY: number): { x: number; y: number
   return { x, y: topAt(l, x, 3) + 3, own: false };
 }
 
-/** Half the width of the widest opaque run under the hat point, as the head's radius in pixels. */
+/** 帽子点下方最宽不透明连续段宽度的一半，即头部的像素半径。 */
 function headRadius(l: Layer, x: number, y: number): number {
   let widest = 0;
   for (let row = Math.round(y + 6); row < Math.min(l.h, y + 20); row++) {
@@ -239,7 +239,7 @@ function headRadius(l: Layer, x: number, y: number): number {
   return Math.min(30, Math.max(12, widest / 2));
 }
 
-/** The middle of the head across the rows just under the hat point: the median middle of the opaque run there. */
+/** 帽子点下方几行中头部的横向中点：该处不透明连续段中点的中位数。 */
 function headMiddle(l: Layer, x: number, y: number, r: number): number {
   const middles: number[] = [];
   for (let row = Math.round(y); row < Math.min(l.h, y + 0.4 * r); row++) {
@@ -254,8 +254,8 @@ function headMiddle(l: Layer, x: number, y: number, r: number): number {
 }
 
 /**
- * The middle of the topmost row where a band as wide as the settle band is solid enough, in pixels, or null. With
- * `wide` (units), the topmost row with an unbroken solid run that wide instead, so thin strokes above a shape do not count.
+ * 足够宽（与落定带同宽）的带状区域连续实心的最上方一行的中点（像素），或 null。
+ * 使用 `wide`（单位）时，改为该宽度内无断裂实心段的最上方一行，使形状上方的细线不被计入。
  */
 function topOf(l: Layer, wide = 0): { x: number; y: number } | null {
   const band = SETTLE_BAND * l.scale, need = SETTLE_FILL * (2 * band + 1);
@@ -279,7 +279,7 @@ function topOf(l: Layer, wide = 0): { x: number; y: number } | null {
   return null;
 }
 
-/** The hat offsets from the stage's list `#MD_HatOffsets`, by character number. */
+/** 舞台列表 `#MD_HatOffsets` 中按角色编号索引的帽子偏移。 */
 function hatOffsets(): string[] {
   const src = fs.readFileSync(path.join(ROOT, 'src/game/generated/Stage_.ts'), 'utf8');
   const m = /^\s*Num_MD_HatOffsets: (\[.*\]),$/m.exec(src);
@@ -287,7 +287,7 @@ function hatOffsets(): string[] {
   return JSON.parse(m[1]) as string[];
 }
 
-/** The sprite that draws the fighters and their hats: the one with both a "1Idle" and a "hat1" costume. */
+/** 绘制斗士及其帽子的角色：同时拥有 "1Idle" 和 "hat1" 造型的角色。 */
 const list = table.costumes.find((l) => l.some((c) => c.name === '1Idle') && l.some((c) => c.name === 'hat1'));
 if (!list) throw new Error('no fighter sprite');
 const byChar = new Map<string, CostumeRef[]>();
@@ -309,18 +309,18 @@ function anchorsFor(char: string, costumes: CostumeRef[], offsets: string[]): Re
   const fix = fixes.characters[char] ?? {};
   const p = hatPoint(ref[0], refSkin, HAT_BASE + (Number(offsets[Number(char) - 1]) || 0));
   const r = fix.radius ?? headRadius(ref[0], p.x, p.y);
-  // The hat sits this far below the top of the hair (between the ears), so it rests on the head.
+  // 帽子位于头发顶部（两耳之间）下方这么多单位处，因此落在头上。
   const top = outline(ref[0], p.x, p.y, 0, -1);
   const hair = top === null ? p.y : p.y - top;
   if (top !== null) p.y = hair + (fix.sink ?? (p.own && top >= SINK_RANGE[0] * r && top <= SINK_RANGE[1] * r ? top : SINK * r));
-  // The game's hat point is the costume's rotation center, which is off the head's middle in a three-quarter view.
+  // 游戏的帽子点是造型的旋转中心，在四分之三视角中偏离头部中心。
   p.x = headMiddle(ref[0], p.x, p.y, r) + (fix.dx ?? 0);
   p.y -= fix.dy ?? 0;
-  // The disc holds the head and a little of the air above it.
+  // 圆盘包含头部及其上方少量空白。
   const cx = p.x, cy = hair + r * 0.85;
   const discs = { coarse: disc(ref[1], cx / 2, cy / 2, r / 2), fine: disc(ref[0], cx, cy, r) };
   const fromCenter = { x: p.x - cx, y: p.y - cy };
-  // Every match keeps the Idle costume's depth below the head's outline.
+  // 每次匹配都保留 Idle 造型在头部轮廓下方的深度。
   const depth = outline(ref[0], p.x, p.y, 0, -1) ?? 0;
   const matched = new Map<string, { entry: number[]; cost: number }>();
   const cells = new Map<string, Cell>();
@@ -343,8 +343,8 @@ function anchorsFor(char: string, costumes: CostumeRef[], offsets: string[]): Re
     if (process.env.HAT_COSTS) console.log(`${c.name} ${m.cost.toFixed(3)} ${entry.join(' ')}`);
     if (sheets) cells.set(c.name, { name: c.name, img: loadImage(skin), skin, entry, cost: m.cost, used: true });
   }
-  // A frame with no head to find, such as a spin, takes the hat point of the frame from the same move whose name
-  // shares the longest start with its own.
+  // 找不到头部的帧（例如旋转）会采用同一动作中名称开头
+  // 与其共享最长前缀的帧的帽子点。
   const good = [...matched].filter(([, v]) => v.cost <= MAX_COST);
   const shared = (a: string, b: string) => {
     let n = 0;
@@ -395,8 +395,8 @@ const DIGITS = [
 ];
 
 /**
- * Every costume with hat 1 drawn where the match puts it, its number, and the match cost as a bar, red when the match
- * is not used. A text file beside the sheet names each numbered costume.
+ * 按匹配位置画出戴着帽子 1 的每个造型、其编号和匹配代价条，未采用匹配时显示为红色。
+ * 图旁文本文件列出每个编号对应的造型。
  */
 function writeSheet(file: string, cells: Cell[]): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -422,7 +422,7 @@ function writeSheet(file: string, cells: Cell[]): void {
       const i = (Math.floor(y / s) * c.img.w + Math.floor(x / s)) * 4;
       put(ox + x, oy + y, c.img.data[i], c.img.data[i + 1], c.img.data[i + 2], c.img.data[i + 3]);
     }
-    // A costume pixel q from the hat point is hat pixel M R(-turn) q.
+    // 相对帽子点的造型像素 q 对应帽子像素 M R(-turn) q。
     const [ux, uy, turn, mirror] = c.entry;
     const res = c.skin.res, px = (ux + c.skin.rcx) * res, py = (c.skin.rcy - uy) * res;
     const a = (turn * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
@@ -437,7 +437,7 @@ function writeSheet(file: string, cells: Cell[]): void {
     }
     const bar = Math.min(CW - 140, Math.round((c.cost / MAX_COST) * 100));
     for (let x = 0; x < bar; x++) for (let y = 0; y < 6; y++) put(ox + 40 + x, oy - 20 + y, c.used ? 40 : 230, c.used ? 160 : 30, 40, 255);
-    // The cell's number in the sheet's list of costume names, in a 3 by 5 pixel font drawn 3 times as large.
+    // 该单元格在图的造型名称列表中的编号，用 3x5 像素字体放大 3 倍绘制。
     [...String(k)].forEach((d, n) => DIGITS[Number(d)].forEach((row, y) => [...row].forEach((bit, x) => {
       if (bit === '1') for (let sy = 0; sy < 3; sy++) for (let sx = 0; sx < 3; sx++) put(ox + n * 12 + x * 3 + sx, oy - 26 + y * 3 + sy, 0, 0, 0, 255);
     })));
@@ -446,7 +446,7 @@ function writeSheet(file: string, cells: Cell[]): void {
   fs.writeFileSync(file, writePng(out));
 }
 
-/** Runs each character in its own process, several at once, and returns every entry. */
+/** 每个角色在独立进程中运行，同时运行多个，并返回所有条目。 */
 async function runAll(chars: string[]): Promise<Record<string, number[]>> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hat-anchors-'));
   const queue = [...chars];
@@ -478,7 +478,7 @@ if (only) {
 if (part) {
   fs.writeFileSync(part, JSON.stringify(entries));
 } else {
-  // Costume order, so the file changes only where a match does.
+  // 按造型顺序排列，使文件只在匹配结果改变处变化。
   const sorted: Record<string, number[]> = {};
   for (const c of list) if (entries[c.name]) sorted[c.name] = entries[c.name];
   fs.writeFileSync(OUT, `${JSON.stringify(sorted)}\n`);
