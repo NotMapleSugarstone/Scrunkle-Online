@@ -30,7 +30,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
         env:
-          RELAY_URL: ${{ vars.RELAY_URL || 'https://scrunkle-rooms.maplesugarstone.workers.dev' }}
+          RELAY_URL: ${{ vars.RELAY_URL || 'https://srt-relay-proxy.paubird5.workers.dev' }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
