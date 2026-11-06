@@ -1,6 +1,6 @@
-// 匹配房间规则以普通类实现，使测试无需 Worker 运行时即可驱动。
-// 一个房间容纳两位玩家，为两人同时开始游戏，并在他们之间转发
-// 连接建立消息。它从不运行游戏。
+// The rules of a matchmaking room as a plain class, so tests drive it without the Worker runtime.
+// A room seats two players, starts the game for both at once, and forwards
+// connection setup messages between them. It never runs the game.
 import { HOLD_SECONDS, SEATS, type FromRoom, type SeatInfo, type StartInfo, type ToRoom } from './protocol.ts';
 import { encodePacket, Kind, toBase64 } from './wire.ts';
 
@@ -8,7 +8,7 @@ export interface SeatState {
   name: string;
   token: string;
   connected: boolean;
-  /** 座位套接字断开的时间，连接正常时为 null。 */
+  /** When the seat's socket dropped, or null while connected. */
   awaySince: number | null;
 }
 
@@ -20,7 +20,7 @@ export interface RoomData {
   created: number;
 }
 
-/** 发给一个座位的消息；`seat` 为 -1 时发给所有已连接座位。 */
+/** A message for one seat, or for every connected seat when `seat` is -1. */
 export type Out = { seat: number; m: FromRoom }[];
 
 export function newRoom(now: number): RoomData {
@@ -49,7 +49,7 @@ export class RoomRules {
     if (next >= 0) this.d.host = next;
   }
 
-  /** 处理来自套接字的消息。`seat` 是套接字的座位，hello 之前为 null。 */
+  /** Handles a message from a socket. `seat` is the socket's seat, or null before hello. */
   handle(seat: number | null, m: ToRoom, now: number, token: () => string, seed: () => number): { out: Out; seat?: number; close?: string } {
     const out: Out = [];
     if (m.type === 'hello') {
@@ -94,7 +94,7 @@ export class RoomRules {
         if (m.to !== seat && this.d.seats[m.to]?.connected) out.push({ seat: m.to, m: { type: 'relay', from: seat, data: m.data } });
         return { out };
       case 'drop': {
-        // 只有房主能决定，只能在对局中决定，且绝不能针对自己。座位会被永久释放。
+        // Only the host decides, only during a game, and never about itself. The seat is released for good.
         if (seat !== this.d.host || !this.d.start || m.seat === seat || !this.d.seats[m.seat]) return { out };
         this.d.seats[m.seat] = null;
         this.d.seats.forEach((s, i) => {
@@ -114,8 +114,8 @@ export class RoomRules {
   }
 
   /**
-   * 套接字关闭或离开。开始前座位立即释放。开始后，主动离开（选择离开或关闭页面）的座位
-   * 会消失，其他玩家收到其告别；连接断开的座位则会被保留。
+   * A socket closed or left. Before the start the seat frees at once. After it, a seat that left (Leave, or a
+   * closed page) is gone and the other players hear its goodbye, and a seat whose connection broke is held.
    */
   drop(seat: number, now: number, left = false): Out {
     const s = this.d.seats[seat];
@@ -135,7 +135,7 @@ export class RoomRules {
     return [...bye, { seat: -1, m: this.seatsMsg() }];
   }
 
-  /** 离开座位的告别数据包，转发给其他所有人，使其游戏不再等待该座位。 */
+  /** The leaving seat's goodbye packet, relayed to everyone else so their games stop waiting for it. */
   private goodbye(seat: number): Out {
     const data = toBase64(encodePacket({ kind: Kind.Bye, from: seat, t: 0 }));
     const out: Out = [];
@@ -145,7 +145,7 @@ export class RoomRules {
     return out;
   }
 
-  /** 释放保留时间已过的座位；房间为空时返回 true。 */
+  /** Releases seats whose hold ran out; returns true when the room is empty. */
   expire(now: number): boolean {
     this.d.seats.forEach((s, i) => {
       if (s && !s.connected && s.awaySince !== null && now - s.awaySince > HOLD_SECONDS * 1000) {

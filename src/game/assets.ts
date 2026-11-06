@@ -11,7 +11,7 @@ export function costumes(targetIndex: number): CostumeDef[] {
 
 export const allCostumes: readonly CostumeDef[][] = table.costumes;
 
-/** 任意角色中第一个使用此名称的造型的皮肤，或 -1。 */
+/** The skin of the first costume with this name in any sprite, or -1. */
 export function skinOf(costume: string): number {
   for (const list of table.costumes) for (const c of list) if (c.name === costume) return c.skin;
   return -1;

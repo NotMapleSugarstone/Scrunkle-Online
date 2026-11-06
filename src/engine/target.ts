@@ -36,7 +36,7 @@ export interface SoundFx {
   pan: number;
 }
 
-/** 每个角色共享的数据：定义、查找表和活动克隆体列表。 */
+/** Shared per-sprite data: definitions, lookup tables and the list of live clones. */
 export class Sprite {
   def: SpriteDef;
   name: string;
@@ -53,10 +53,10 @@ export class Sprite {
   broadcastScripts = new Map<string, ScriptDef[]>();
   scriptIndex = new Map<ScriptDef, number>();
   clones: Target[] = [];
-  /** 从项目文件加载的目标；它永远不会被删除。 */
+  /** The target loaded from the project file; it is never deleted. */
   original!: Target;
   index: number;
-  /** 没有任何积木写入的列表，按属性名索引。它们保持冻结，因此克隆体和快照可共享。 */
+  /** Lists no block writes, by property name. They stay frozen, so clones and snapshots can share them. */
   fixedLists: Set<string>;
 
   constructor(def: SpriteDef, index: number) {
@@ -95,7 +95,7 @@ export class Sprite {
   }
 }
 
-/** 一个角色实例（原体或克隆体）或舞台。 */
+/** One sprite instance (the original or a clone) or the stage. */
 export class Target {
   rt: Runtime;
   sprite: Sprite;
@@ -113,20 +113,20 @@ export class Target {
   volume = 100;
   effects: Effects = noEffects();
   /**
-   * 渲染器是否持有此可绘制对象的凸包。此时接触检测会在凸包边界内测试，
-   * 而不是整个造型框。计算边界会设置它；造型、可见性或形状效果更新会清除它。
+   * Whether the renderer holds this drawable's convex hull. Touching then tests within the hull's bounds
+   * instead of the full costume box. Computing bounds sets it, and a costume, visibility or shape effect update clears it.
    */
   hullClean = false;
-  // 生成代码通过每个角色的接口为这些字段指定类型。
+  // Generated code types these through per-sprite interfaces.
   v: any;
   l: any;
   pen: PenState | null = null;
   snd: SoundFx | null = null;
-  /** 以“play until done”启动且尚未被普通播放替换的声音索引。 */
+  /** Sound indices started with "play until done" and not since replaced by a plain play. */
   waitingSounds = new Set<number>();
-  /** 每个脚本当前在运行时列表中的线程，按脚本索引。 */
+  /** The thread currently in the runtime's list for each script of this target, by script index. */
   scriptThreads: (Thread | undefined)[] = [];
-  /** 每个计时器帽上一次测试结果，按帽积木 id 索引。只有测试变为 true 时帽子才启动脚本。 */
+  /** Each timer hat's last test result by hat block id. A hat starts its script only when its test turns true. */
   edgeValues = new Map<string, boolean>();
 
   constructor(rt: Runtime, sprite: Sprite, id: number, isOriginal: boolean) {
@@ -141,11 +141,11 @@ export class Target {
     return this.sprite.name;
   }
 
-  // ---------------------------------------------------------------- 面向渲染器的状态
+  // ---------------------------------------------------------------- renderer-facing state
 
   /**
-   * 渲染器存储的整数可绘制位置。仅当新位置比较不相等时才更新，
-   * 因此已存储的 -0 在移动到 +0 后仍会保留（符号会出现在图章记录中）。
+   * Integer drawable position, as the renderer stores it. It only updates when the new position
+   * compares unequal, so a stored -0 survives a move to +0 (the sign shows in stamp records).
    */
   drawX = 0;
   drawY = 0;
@@ -169,11 +169,11 @@ export class Target {
   private visualChange(): void {
     if (!this.visible) return;
     this.rt.requestRedraw();
-    // 显示中的对话气泡会在每次视觉变化时重新定位，并计算外壳。
+    // A shown speech bubble repositions on every visual change, which computes the hull.
     if (this.rt.bubbles[this.id] !== undefined) this.rt.render.computeHull(this);
   }
 
-  // ---------------------------------------------------------------- 运动
+  // ---------------------------------------------------------------- motion
 
   setXY(x: number, y: number): void {
     if (this.isStage) return;
@@ -257,7 +257,7 @@ export class Target {
     return limitPrecision(this.y);
   }
 
-  // ---------------------------------------------------------------- 外观
+  // ---------------------------------------------------------------- looks
 
   setCostume(index: number): void {
     index = Math.round(index);
@@ -356,7 +356,7 @@ export class Target {
     if (where === 'front') this.goToFront();
     else this.goToBack();
   }
-  /** `go forward/backward n layers`：渲染顺序和执行顺序都移动 n。 */
+  /** `go forward/backward n layers`: renderer order and execution order both move by n. */
   goLayers(where: string, n: Value): void {
     if (this.isStage) return;
     const d = where === 'forward' ? toNumber(n) : -toNumber(n);
@@ -364,7 +364,7 @@ export class Target {
     this.rt.moveExecutable(this, d);
   }
 
-  // ---------------------------------------------------------------- 画笔
+  // ---------------------------------------------------------------- pen
 
   penState(): PenState {
     if (!this.pen) this.pen = defaultPen();
@@ -420,7 +420,7 @@ export class Target {
     p.diameter = clamp(p.diameter + toNumber(v), 1, 1200);
   }
 
-  // ---------------------------------------------------------------- 声音状态
+  // ---------------------------------------------------------------- sound state
 
   soundState(): SoundFx {
     if (!this.snd) this.snd = { pitch: 0, pan: 0 };

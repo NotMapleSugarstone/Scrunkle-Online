@@ -7,31 +7,31 @@ export const STATUS_PROMISE_WAIT = 1;
 export const STATUS_YIELD_TICK = 3;
 export const STATUS_DONE = 4;
 
-/** 可恢复调用栈的一层。纯数据，因此快照可深拷贝。 */
+/** One level of a resumable call stack. Plain data, so snapshots can deep-copy it. */
 export interface Frame {
-  /** 运行时单元表中的单元索引。 */
+  /** Unit index into the runtime's unit table. */
   u: number;
-  /** 单元内的恢复标签。 */
+  /** Resume label inside the unit. */
   pc: number;
-  /** 此单元顶层的当前 warp 标志。 */
+  /** Current warp flag of this unit's top level. */
   warp: boolean;
-  /** 调用者层的 warp 标志，在此单元顶层的 Promise 续体之后继承。 */
+  /** Warp flag of the caller's level, inherited after a promise continuation at this unit's top level. */
   pw: boolean;
-  /** 过程参数。 */
+  /** Procedure arguments. */
   a: Value[];
-  /** 循环计数器、等待计时器及其他层级状态。 */
+  /** Loop counters, wait timers and other per-level state. */
   l: (number | undefined)[];
-  /** 被调用者通过 Promise 续体结束时恢复的标签。 */
+  /** Label to resume at when a callee finishes through a promise continuation. */
   pcp: number;
-  /** 被调用者通过 `stop this script` 返回时恢复的标签。 */
+  /** Label to resume at when a callee returns through `stop this script`. */
   pcs: number;
-  /** `broadcast and wait` 启动的线程 id，等待期间保留。 */
+  /** Ids of the threads a `broadcast and wait` started, while it waits. */
   w?: number[];
-  /** 此单元待处理调用周围的分支数；原版递归测试将其计为积木栈条目。 */
+  /** Branches around this unit's pending call, which the original's recursion test counts as block stack entries. */
   cd?: number;
 }
 
-/** 标记 Promise 续体后落到单元末尾的帧标签。 */
+/** Marks a frame label that falls off the end of its unit after a promise continuation. */
 export const PC_FALL_OFF = -2;
 
 export class Thread {
@@ -41,11 +41,11 @@ export class Thread {
   status = STATUS_RUNNING;
   isKilled = false;
   frames: Frame[] = [];
-  /** 尚未运行的普通函数脚本。 */
+  /** A plain-function script that has not run yet. */
   fresh = false;
-  /** 脚本通过 Promise 续体落到末尾；将在下一步完成。 */
+  /** The script fell off its end through a promise continuation; it finishes on its next step. */
   nullPending = false;
-  /** 被重启替换出线程列表；其任何行为都不再可观察。 */
+  /** Replaced in the thread list by a restart; nothing it does is observable any more. */
   orphan = false;
 
   constructor(id: number, target: Target, script: ScriptDef) {
@@ -54,7 +54,7 @@ export class Thread {
     this.script = script;
   }
 
-  /** 线程没有更多工作时为 true，对应空积木栈。 */
+  /** True when the thread has no more work, matching an empty block stack. */
   get stackEmpty(): boolean {
     return !this.fresh && !this.nullPending && this.frames.length === 0;
   }

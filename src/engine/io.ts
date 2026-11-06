@@ -1,9 +1,9 @@
-// 模拟所看到的键盘、鼠标和文本作答状态。
+// Keyboard, mouse and text-answer state as the simulation sees it.
 import type { Value } from './cast.ts';
 
 const KEY_NAMES = ['space', 'left arrow', 'up arrow', 'right arrow', 'down arrow', 'enter'];
 
-/** 将浏览器 `KeyboardEvent.key` 转换为游戏使用的键名，游戏忽略的键返回 ''。 */
+/** Converts a browser `KeyboardEvent.key` to the key name the game uses, or '' for keys it ignores. */
 export function browserKeyToName(key: string): string {
   switch (key) {
     case ' ': return 'space';
@@ -17,7 +17,7 @@ export function browserKeyToName(key: string): string {
   return key.toUpperCase();
 }
 
-/** 将游戏代码中的按键参数规范化为键名。 */
+/** Normalizes a key argument from game code to a key name. */
 export function keyArgToName(arg: Value): string {
   if (typeof arg === 'number') {
     if (arg >= 48 && arg <= 90) return String.fromCharCode(arg);
@@ -36,26 +36,26 @@ export function keyArgToName(arg: Value): string {
   return k.toUpperCase();
 }
 
-/** 一位玩家一帧的输入。 */
+/** Input for one player for one frame. */
 export interface PlayerInput {
-  /** 本帧按住的键名。 */
+  /** Key names held this frame. */
   keys: string[];
-  /** 舞台坐标中的鼠标位置（整数）和按钮状态，前提是此玩家驱动鼠标。 */
+  /** Mouse position in stage coordinates (integers) and button state, if this player drives the mouse. */
   mouse?: { x: number; y: number; down: boolean };
-  /** 提交给已打开问题的文本。 */
+  /** Text submitted to an open question. */
   answer?: string;
-  /** 自上一帧以来其他玩家设置的云变量值，按到达顺序以名称和值成对表示。 */
+  /** Cloud variable values other players set since the last frame, as name and value pairs in arrival order. */
   cloud?: [string, string][];
-  /** 测试在帧运行前设置的舞台变量，按名称索引。页面从不发送这些。 */
+  /** Stage variables a test sets before the frame runs, by name. The page never sends these. */
   vars?: [string, Value][];
-  /** 测试在帧运行前替换的列表，包含目标名称、列表 id 和项目。页面从不发送这些。 */
+  /** Lists a test replaces before the frame runs, as target name, list id and items. The page never sends these. */
   lists?: [string, string, Value[]][];
 }
 
 export class IoState {
-  /** 每个玩家槽位按住的键。单机游玩时槽位 0 是本地键盘。 */
+  /** Keys held per player slot. Slot 0 is the local keyboard in single-machine play. */
   keys: Set<string>[] = [new Set(), new Set(), new Set(), new Set()];
-  /** 为 true 时，控制表各玩家行只能看到自己槽位的按键。 */
+  /** When true, player rows of the controls table only see their own slot's keys. */
   netMode = false;
   mouseX = 0;
   mouseY = 0;
@@ -73,7 +73,7 @@ export class IoState {
     return false;
   }
 
-  /** 控制表中一行的按键测试（第 0 行共享，第 1 至 4 行是玩家）。 */
+  /** Key test for one row of the controls table (row 0 is shared, rows 1 to 4 are players). */
   keyPressedForRow(row: number, arg: Value): boolean {
     if (!this.netMode || row < 1 || row > 4) return this.keyPressed(arg);
     if (arg === 'any') return this.keys[row - 1].size > 0;

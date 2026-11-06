@@ -1,5 +1,5 @@
-// 各角色声音播放的确定性模型。它决定“播放到结束”何时完成；
-// 音频输出层只跟随它的事件。
+// Deterministic model of per-sprite sound playback. It decides when "play until done" finishes;
+// the audio output layer only follows its events.
 import { pow2 } from './dmath.ts';
 import type { Target } from './target.ts';
 import type { Thread } from './thread.ts';
@@ -9,34 +9,34 @@ export interface SoundEvent {
   kind: 'play' | 'stop' | 'fx';
   sprite: number;
   sound: number;
-  /** 事件在模拟中的时间，单位毫秒。 */
+  /** Simulation time of the event in ms. */
   at: number;
-  /** 开始时的播放速率，'fx' 时为新的速率。 */
+  /** Playback rate at start, or the new rate for 'fx'. */
   rate: number;
-  /** 目标音量 0..100。 */
+  /** Target volume 0..100. */
   volume: number;
-  /** 声像 -100..100。 */
+  /** Pan -100..100. */
   pan?: number;
-  /** 此播放器每次启动时递增，使输出层能匹配重新开始。 */
+  /** Increments with each start of this player, so the output layer can match restarts. */
   serial: number;
 }
 
-/** 角色每个声音一个播放器，由此角色的所有克隆共享。 */
+/** One player per sound of a sprite, shared by all of the sprite's clones. */
 export interface PlayerState {
   isPlaying: boolean;
   startingUntil: number;
-  /** 到 `lastT` 为止消耗的缓冲时间，单位毫秒。 */
+  /** Buffer time consumed up to `lastT`, in ms. */
   pos: number;
   lastT: number;
   rate: number;
-  /** 等待此播放器下次停止的线程。 */
+  /** Threads waiting for this player's next stop. */
   waiters: Thread[];
-  /** 最后播放此声音的目标。 */
+  /** The target that last played this sound. */
   owner: Target | null;
-  /** 最后应用到此声音效果链的音高效果值。 */
+  /** Pitch effect value last applied to this sound's effect chain. */
   pitch: number;
   serial: number;
-  /** 此声音在角色声音中首次播放的排名，或 -1。停止所有声音时按此顺序执行。 */
+  /** Rank of this sound's first play among its sprite's sounds, or -1. Stopping all sounds goes in this order. */
   order: number;
 }
 

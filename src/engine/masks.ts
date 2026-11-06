@@ -1,22 +1,22 @@
-// 接触遮罩文件：每个带遮罩造型的 1 位 alpha 遮罩以游程编码保存，前面是 JSON 索引。
-// 磁盘上的文件经过 gzip 压缩。调用方负责解压，因为浏览器和工具的解压方式不同。
+// The touching masks file: every masked costume's 1-bit alpha mask as run lengths, behind a JSON index.
+// The file on disk is gzipped. Callers decompress it, because browsers and the tools do that differently.
 
-/** 造型遮罩的存储形式：透明和实心像素交替的 varint 游程长度，从透明开始。 */
+/** A costume's mask as stored: varint run lengths of clear and set pixels, alternating and starting with clear. */
 export interface PackedMask {
   w: number;
   h: number;
   runs: Uint8Array;
 }
 
-/** 一个造型在渲染器 1x mip 上的 alpha 遮罩，用于接触测试。 */
+/** Alpha mask of one costume at the renderer's 1x mip, used for touching tests. */
 export interface Silhouette {
   w: number;
   h: number;
-  /** 每像素一位，逐行从最低位开始，在 alpha > 0 处置位。 */
+  /** One bit per pixel, row by row and lowest bit first, set where alpha > 0. */
   bits: Uint8Array;
 }
 
-/** 角色名称对应的各造型遮罩，按造型顺序排列。 */
+/** Sprite name to its costumes' masks, in costume order. */
 export type MaskSet = Record<string, PackedMask[]>;
 
 function pushVarint(out: number[], n: number): void {
@@ -27,7 +27,7 @@ function pushVarint(out: number[], n: number): void {
   out.push(n);
 }
 
-/** 对以打包位表示的遮罩进行游程编码。 */
+/** Run-length encodes a mask given as packed bits. */
 export function packMask(w: number, h: number, bits: Uint8Array): PackedMask {
   const out: number[] = [];
   let on = false;
@@ -66,7 +66,7 @@ export function unpackMask(p: PackedMask): Silhouette {
   return { w: p.w, h: p.h, bits };
 }
 
-/** 写入未压缩文件：小端序索引长度、JSON 索引，然后每个遮罩的游程。 */
+/** Writes the uncompressed file: a little-endian index length, the JSON index, then every mask's runs. */
 export function encodeMaskSet(set: MaskSet): Uint8Array {
   const index: Record<string, [number, number, number, number][]> = {};
   const chunks: Uint8Array[] = [];

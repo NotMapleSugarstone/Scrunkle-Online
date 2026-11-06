@@ -1,11 +1,11 @@
-// 在各 JavaScript 引擎中产生逐位一致结果的无理函数。各引擎为 Math.sin、Math.atan 等
-// 提供的 libm 代码不同，而一位的差异就会让在线游戏失去同步。这些函数采用经典的可自由
-// 分发 libm 算法，只使用 +、-、*、/ 和 sqrt，
-// IEEE 754 会在所有平台上以相同方式舍入。
+// Transcendental functions that give the same bits in every JavaScript engine. Engines ship
+// different libm code for Math.sin, Math.atan and the rest, and a one-bit difference desyncs an
+// online game. These follow the classic freely distributable libm algorithms and use only +, -, *, / and sqrt,
+// which IEEE 754 rounds identically everywhere.
 
 const F64 = new Float64Array(1);
 const U32 = new Uint32Array(F64.buffer);
-// 双精度数在内存中的字序；当前所有浏览器均为小端。
+// Word order of a double in memory; every current browser is little-endian.
 const HI = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? 1 : 0;
 const LO = 1 - HI;
 
@@ -32,20 +32,20 @@ function withHigh(x: number, hi: number): number {
   U32[HI] = hi;
   return F64[0];
 }
-/** x * 2^n，指数范围满足归约所需（精确）。 */
+/** x * 2^n for the exponent range the reduction needs (exact). */
 function scalbn(x: number, n: number): number {
   while (n > 1000) {
-    x *= fromWords(0x7e700000, 0); // 2 的 1000 次方
+    x *= fromWords(0x7e700000, 0); // 2^1000
     n -= 1000;
   }
   while (n < -1000) {
-    x *= fromWords(0x01700000, 0); // 2 的 -1000 次方
+    x *= fromWords(0x01700000, 0); // 2^-1000
     n += 1000;
   }
   return x * fromWords((n + 1023) << 20, 0);
 }
 
-// ------------------------------------------------------------------ 参数归约
+// ------------------------------------------------------------------ argument reduction
 
 const TWO_OVER_PI = [
   0xa2f983, 0x6e4e44, 0x1529fc, 0x2757d1, 0xf534dd, 0xc0db62, 0x95993c, 0x439041, 0xfe5163, 0xabdebb, 0xc561b7, 0x246e3a,
@@ -75,9 +75,9 @@ const PIO2_2T = 2.02226624879595063154e-21;
 const PIO2_3 = 2.02226624871116645580e-21;
 const PIO2_3T = 8.47842766036889956997e-32;
 
-/** 针对超大参数的 Payne-Hanek 归约；写入 y[0..1] 并返回 n mod 8。 */
+/** Payne-Hanek reduction for huge arguments; writes y[0..1] and returns n mod 8. */
 function kernelRemPio2(x: number[], y: number[], e0: number, nx: number): number {
-  const jk = 4; // 精度 2（双精度）
+  const jk = 4; // precision 2 (double)
   const jp = jk;
   const iq: number[] = new Array(20).fill(0);
   const f: number[] = new Array(20).fill(0);
@@ -194,7 +194,7 @@ function kernelRemPio2(x: number[], y: number[], e0: number, nx: number): number
   return n & 7;
 }
 
-/** 将 x 归约到 [-pi/4, pi/4] 内的 y[0] + y[1]；返回象限数。 */
+/** Reduces x to y[0] + y[1] in [-pi/4, pi/4]; returns the quadrant count. */
 function remPio2(x: number, y: number[]): number {
   const hx = highWord(x);
   const ix = hx & 0x7fffffff;
@@ -287,7 +287,7 @@ function remPio2(x: number, y: number[]): number {
   return n;
 }
 
-// ------------------------------------------------------------------ [-pi/4, pi/4] 上的核心函数
+// ------------------------------------------------------------------ kernels on [-pi/4, pi/4]
 
 const S1 = -1.66666666666666324348e-1;
 const S2 = 8.33333333332248946124e-3;
@@ -421,7 +421,7 @@ export function tan(x: number): number {
   return kTan(Y[0], Y[1], 1 - ((n & 1) << 1));
 }
 
-// ------------------------------------------------------------------ 反三角函数
+// ------------------------------------------------------------------ inverse trig
 
 const ATANHI = [4.63647609000806093515e-1, 7.85398163397448278999e-1, 9.82793723247329054082e-1, 1.57079632679489655800e0];
 const ATANLO = [2.26987774529616870924e-17, 3.06161699786838301793e-17, 1.39033110312309984516e-17, 6.12323399573676603587e-17];
@@ -609,7 +609,7 @@ export function acos(x: number): number {
   return 2.0 * (df + w);
 }
 
-// ------------------------------------------------------------------ exp 与 log
+// ------------------------------------------------------------------ exp and log
 
 const HALF = [0.5, -0.5];
 const O_THRESHOLD = 7.09782712893383973096e2;
@@ -722,7 +722,7 @@ export function log(x: number): number {
   return dk * LN2_HI - (s * (f - R) - dk * LN2_LO - f);
 }
 
-/** 不使用引擎 pow 计算 2^y。 */
+/** 2^y without the engine's pow. */
 export function pow2(y: number): number {
   return exp(y * 0.6931471805599453);
 }

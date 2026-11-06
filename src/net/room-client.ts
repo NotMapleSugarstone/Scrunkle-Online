@@ -1,25 +1,25 @@
-// 匹配房间的浏览器端：加入码请求、带心跳的房间套接字，以及
-// 用令牌取回掉线座位的重连。来自房间的每条消息都会先经过
-// `readRoom` 再被读取。
+// The browser end of a matchmaking room: join-code requests, the room socket with pings, and a
+// reconnect that takes a dropped seat back with its token. Every message from the room passes
+// `readRoom` before anything reads it.
 import { readQueueReply, readRoom, type FromRoom, type QueueReply, type ToRoom } from './protocol.ts';
 
 declare const __BUILD__: string;
 declare const __RELAY_URL__: string;
 
-/** 站点的构建指纹，使房间只配对完全相同的游戏。 */
+/** The site's build fingerprint, so rooms only pair identical games. */
 export const BUILD: string = typeof __BUILD__ === 'string' ? __BUILD__ : 'dev';
 
 const PING_MS = 10_000;
 const RETRY_MS = 1_500;
 const RETRY_LIMIT = 20;
 
-/** 房间所在地址：开发时是此页面的源（Vite 转发 /api），否则是部署的 Worker。 */
+/** Where the rooms are: this page's origin while developing (Vite forwards /api), else the deployed Worker. */
 export function relayBase(): string {
   if (import.meta.env?.DEV) return location.origin;
   return typeof __RELAY_URL__ === 'string' ? __RELAY_URL__ : '';
 }
 
-/** 发布构建未配置房间服务器地址时为 false。 */
+/** False for a published build made without a room server address. */
 export const onlineAvailable = (): boolean => relayBase() !== '';
 
 async function post(path: string, body: object): Promise<QueueReply> {
@@ -45,7 +45,7 @@ export class RoomClient {
   private retries = 0;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private closedByUs = false;
-  /** 房间拒绝此玩家的原因（一旦被拒绝）。 */
+  /** Why the room turned this player away, once it has. */
   refusal: string | null = null;
   seat = -1;
   onMessage: (m: FromRoom) => void = () => {};

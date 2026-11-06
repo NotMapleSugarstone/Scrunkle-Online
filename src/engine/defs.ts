@@ -1,36 +1,36 @@
-// 运行时与生成游戏代码共享的静态定义。
+// Static definitions shared by the runtime and the generated game code.
 import type { Value } from './cast.ts';
 import type { Target } from './target.ts';
 import type { Thread, Frame } from './thread.ts';
 import target from '../game/runtime.json';
 
 /**
- * 若项目面向会编译脚本为 JavaScript 的运行时则为 true，面向解释器则为 false。其编译代码在若干
- * 规则上与解释器不同，引擎与转译器都会遵循这些规则（src/game/runtime.json，由
- * tools/extract.mjs 写入）。
+ * True for a project made for the runtime that compiles scripts to JavaScript, false for the interpreter. Its compiled
+ * code differs from the interpreter in a few rules the engine and transpiler follow (src/game/runtime.json, written by
+ * tools/extract.mjs).
  */
 export const COMPILED = target.runtime === 'turbowarp';
 
-/** 项目原本使用的舞台尺寸，由原项目的设置决定。 */
+/** The stage size the project was made for, which the original's settings set. */
 export const STAGE_W: number = target.stageWidth;
 export const STAGE_H: number = target.stageHeight;
-/** 舞台尺寸的一半：舞台上 x 与 y 的最大值。 */
+/** Half the stage size: the largest x and y on the stage. */
 export const STAGE_X = STAGE_W / 2;
 export const STAGE_Y = STAGE_H / 2;
 
-/** 一张造型图像的光栅化与放置数据，由原渲染器测得。 */
+/** Rasterization and placement data for one costume image, as the original renderer measured it. */
 export interface SkinDef {
-  /** 以舞台单位表示的逻辑宽高。 */
+  /** Logical width and height in stage units. */
   w: number;
   h: number;
-  /** 皮肤空间中的旋转中心。 */
+  /** Rotation center in skin space. */
   rcx: number;
   rcy: number;
   kind: 'svg' | 'bitmap';
   file: string;
-  /** 位图每个舞台单位对应的像素数。 */
+  /** Pixels per stage unit for bitmaps. */
   res: number;
-  /** 矢量光栅化器可使用的最大 mip 缩放。 */
+  /** Largest mip scale the vector rasterizer may use. */
   maxScale: number;
 }
 
@@ -48,38 +48,38 @@ export interface SoundDef {
 
 export type HatKind = 'flag' | 'broadcast' | 'clone' | 'key' | 'click' | 'timer';
 
-/** 可恢复单元返回给线程步进器的控制码。 */
+/** Control codes a resumable unit returns to the thread stepper. */
 export enum Ctl {
-  /** 挂起到下一 tick；线程保持活动。 */
+  /** Suspend until the next tick; the thread stays active. */
   Yield = 0,
-  /** 挂起，直到类似 Promise 的操作在帧间完成。 */
+  /** Suspend until a promise-style operation resolves between frames. */
   Promise = 1,
-  /** 已压入被调用帧；立即运行它。 */
+  /** A callee frame was pushed; run it now. */
   Call = 2,
-  /** 单元正常结束；恢复调用者。 */
+  /** The unit finished normally; resume the caller. */
   Return = 3,
-  /** 在过程内部执行 `stop this script`；在调用者的停止标签处恢复调用者。 */
+  /** `stop this script` inside a procedure; resume the caller at its stop label. */
   StopReturn = 4,
-  /** 脚本结束；线程完成。 */
+  /** The script finished; the thread is done. */
   End = 5,
-  /** 挂起到下一帧；线程不再计为活动（原项目的 yield-tick）。 */
+  /** Suspend until the next frame; the thread does not count as active (the original's yield-tick). */
   YieldTick = 6,
 }
 
-/** 可恢复的代码单元（脚本体或过程体），会编译为状态机。 */
+/** A resumable code unit (script body or procedure body) compiled to a state machine. */
 export type UnitFn = (th: Thread, f: Frame) => Ctl;
 
 export interface ScriptDef {
   hat: HatKind;
-  /** 广播帽使用的大写广播名，按键帽使用的键名，或计时器帽测得的数值。 */
+  /** Upper-cased broadcast name for broadcast hats, the key name for key hats, or the measured value for timer hats. */
   msg?: string;
-  /** 计时器帽的阈值，按原项目中的输入方式保存。 */
+  /** The threshold of a timer hat, as typed in the original. */
   value?: string;
-  /** 帽子的积木 id，用于一致性报告。 */
+  /** Block id of the hat, for parity reports. */
   top: string;
-  /** 永远不会挂起的脚本会作为普通函数直接运行到结束。 */
+  /** Scripts that can never suspend run to completion as a plain function. */
   plain?: (t: Target) => void;
-  /** 可能挂起的脚本会启动这个可恢复单元。 */
+  /** Scripts that can suspend start this resumable unit. */
   unit?: number;
 }
 
@@ -96,17 +96,17 @@ export interface SpriteDef {
   rotationStyle: string;
   draggable: boolean;
   volume: number;
-  /** 属性名到初始值。 */
+  /** Property name to initial value. */
   vars: Record<string, Value>;
   lists: Record<string, Value[]>;
-  /** 原始变量名到属性名，用于 `(variable) of (sprite)`。 */
+  /** Original variable name to property name, for `(variable) of (sprite)`. */
   varNames?: Record<string, string>;
-  /** 属性名到原始变量 id，用于一致性报告。 */
+  /** Property name to the original variable id, for parity reports. */
   varIds: Record<string, string>;
   listIds: Record<string, string>;
-  /** 原始列表名到属性名，供按名称读取列表的 TypeScript 代码使用。 */
+  /** Original list name to property name, for TypeScript that reads lists by name. */
   listNames?: Record<string, string>;
-  /** 没有任何积木写入的列表属性名。克隆体与快照共享它们，而不是复制。 */
+  /** Property names of lists no block writes. Clones and snapshots share them instead of copying them. */
   fixedLists?: string[];
   costumes: CostumeDef[];
   sounds: SoundDef[];
@@ -114,8 +114,8 @@ export interface SpriteDef {
 }
 
 export interface Monitors {
-  /** 舞台上的列表属性名，对应可见性与位置。 */
+  /** List property name on the stage to visibility and placement. */
   lists: { prop: string; label: string; x: number; y: number; width: number; height: number; visible: boolean }[];
-  /** 舞台变量属性名到标签、显示模式（'default'、'large' 或 'slider'）、位置与可见性。 */
+  /** Stage variable property name to label, display mode ('default', 'large' or 'slider'), position and visibility. */
   vars: { prop: string; label: string; mode: string; x: number; y: number; visible: boolean }[];
 }

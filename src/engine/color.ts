@@ -1,4 +1,4 @@
-// 画笔使用的颜色转换。
+// Color conversions used by the pen.
 
 export interface Rgb {
   r: number;

@@ -1,12 +1,12 @@
-// 将有关问题（卡死、不同步、链路丢失、脚本错误）的简短诊断发送到房间
-// 服务器，由服务器写入日志。这里的内容都不影响游戏。
+// Sends short diagnostics about problems (freezes, desyncs, lost links, script errors) to the room
+// server, which writes them to its log. Nothing here affects the game.
 import { BUILD, relayBase } from './room-client.ts';
 
 const PER_KIND = 5;
 const TEXT_MAX = 1500;
 const sent = new Map<string, number>();
 
-/** 当前在线游戏的房间和座位，会附加到每份报告。 */
+/** Room and seat of the current online game, added to every report. */
 export const reportContext: { room?: string; seat?: number; online?: boolean } = {};
 
 function trim(v: unknown, depth = 0): unknown {
@@ -16,7 +16,7 @@ function trim(v: unknown, depth = 0): unknown {
   return Object.fromEntries(Object.entries(v).slice(0, 40).map(([k, x]) => [k, trim(x, depth + 1)]));
 }
 
-/** 报告一个问题。每种问题每次页面加载最多发送几次。 */
+/** Reports one problem. Each kind is sent at most a few times per page load. */
 export function report(kind: string, detail: Record<string, unknown>): void {
   const base = relayBase();
   if (!base) return;
@@ -31,6 +31,6 @@ export function report(kind: string, detail: Record<string, unknown>): void {
     agent: navigator.userAgent,
     detail: trim(detail),
   });
-  // 纯文本正文使请求保持简单，浏览器不会发送预检请求。
+  // A plain-text body keeps this a simple request, so the browser sends no preflight.
   void fetch(`${base}/api/report`, { method: 'POST', body, keepalive: true, headers: { 'content-type': 'text/plain' } }).catch(() => {});
 }

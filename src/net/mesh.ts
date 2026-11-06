@@ -1,13 +1,13 @@
-// 玩家之间的直连：每对玩家一条 WebRTC 数据通道，设为无序且
-// 不重传，以获得最低延迟。建立连接的消息通过房间传递。如果
-// 无法建立直连，或对局中直连静默，该玩家的数据包也会经过
-// 房间的中继。
+// Direct connections between players: one WebRTC data channel per pair, set to unordered and
+// without retransmission for the lowest latency. Setup messages go through the room. If a
+// direct link cannot be made, or goes quiet during a game, packets for that player also go
+// through the room's relay.
 import type { RoomClient } from './room-client.ts';
 import { fromBase64, toBase64 } from './wire.ts';
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }];
 const DIRECT_TIMEOUT_MS = 8_000;
-/** 对局中每个对端每帧都发送数据包，因此这么久没收到就说明链路正在失效。 */
+/** During a game every peer sends a packet each frame, so this long without one means the link is failing. */
 const QUIET_MS = 1_000;
 const WATCH_MS = 250;
 
@@ -18,7 +18,7 @@ interface Link {
   channel: RTCDataChannel | null;
   state: LinkState;
   timer: ReturnType<typeof setTimeout>;
-  /** 上次通过直连通道收到数据包的时间。 */
+  /** Last time a packet arrived over the direct channel. */
   heard: number;
 }
 
@@ -27,7 +27,7 @@ export class Mesh {
   private watcher: ReturnType<typeof setInterval> | null = null;
   onPacket: (data: ArrayBuffer) => void = () => {};
   onLinkChange: (seat: number, state: LinkState) => void = () => {};
-  /** 链路切换到中继时调用，并提供原因，用于诊断。 */
+  /** Called when a link switches to the relay, with the reason, for diagnostics. */
   onFallback: (seat: number, reason: string) => void = () => {};
 
   constructor(private room: RoomClient, readonly local: number, extraIce: RTCIceServer[] = []) {
@@ -36,7 +36,7 @@ export class Mesh {
 
   private ice: RTCIceServer[];
 
-  /** 为 `seats` 中尚无链路的每个座位打开链路。座位号较小的一方发出 offer。 */
+  /** Opens links to every seat in `seats` that has none yet. The lower seat makes the offer. */
   ensure(seats: number[]): void {
     for (const s of seats) {
       if (s === this.local || this.links.has(s)) continue;
@@ -48,7 +48,7 @@ export class Mesh {
     return this.links.get(seat)?.state ?? 'connecting';
   }
 
-  /** 每条链路的状态，用于问题报告。 */
+  /** Each link's states, for problem reports. */
   describe(): Record<number, Record<string, string | number>> {
     const now = performance.now();
     const out: Record<number, Record<string, string | number>> = {};
@@ -64,7 +64,7 @@ export class Mesh {
     return out;
   }
 
-  /** 开始检查直连是否持续收到数据包。在游戏每帧发送后调用一次。 */
+  /** Starts checking that direct links keep delivering packets. Call once the game sends every frame. */
   watch(): void {
     if (this.watcher) return;
     const now = performance.now();
@@ -128,9 +128,10 @@ export class Mesh {
   }
 
   /**
-   * 从此以后将此座位的数据包经中继发送，直连通道仍打开时也继续经直连发送。
-   * 中继在此局剩余时间内保持开启，因为失效链路往往仍能单向工作。`tell` 会让
-   * 对端也这样做，因为他们可能仍能收到本端，却不知道自己的数据包已丢失。
+   * Sends this seat's packets through the relay from now on, and through the direct channel too
+   * while it is open. The relay stays on for the rest of the game, because a failing link often
+   * still works in one direction. `tell` asks the other player to do the same, since they may
+   * still be hearing this side and not know their own packets are lost.
    */
   private fallBack(seat: number, reason: string, tell: boolean): void {
     const link = this.links.get(seat);
@@ -142,7 +143,7 @@ export class Mesh {
     this.onFallback(seat, reason);
   }
 
-  /** 处理另一座位经房间转发的建立连接消息。 */
+  /** Handles a setup message from another seat, relayed by the room. */
   async signal(from: number, data: string): Promise<void> {
     let msg: { sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit; relay?: boolean };
     try {
@@ -168,16 +169,16 @@ export class Mesh {
         await pc.addIceCandidate(msg.ice);
       }
     } catch {
-      // 失败的步骤会让链路超时后转入中继。
+      // A failed step leaves the link to time out into the relay.
     }
   }
 
-  /** 通过房间中继收到的数据包。 */
+  /** Packets that came through the room's relay. */
   relayed(data: string): void {
     try {
       this.onPacket(fromBase64(data));
     } catch {
-      // 忽略格式错误的中继数据。
+      // Ignore malformed relay data.
     }
   }
 
@@ -188,7 +189,7 @@ export class Mesh {
       try {
         link.channel.send(data);
       } catch {
-        // 如果链路已回退，下面的中继仍会承载它。
+        // The relay below still carries it if the link has fallen back.
       }
     }
     if (link.state === 'relay') this.room.send({ type: 'relay', to: seat, data: toBase64(data) });

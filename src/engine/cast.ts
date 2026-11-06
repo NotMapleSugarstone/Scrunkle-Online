@@ -1,5 +1,5 @@
-// 源项目运行时的值转换与运算符语义。
-// 生成的游戏代码每次动态类型操作都会调用这些辅助函数。
+// Value casting and operator semantics of the source project's runtime.
+// Generated game code calls these helpers for every dynamically typed operation.
 
 import * as dm from './dmath.ts';
 import { COMPILED } from './defs.ts';
@@ -56,7 +56,7 @@ export function gt(a: Value | undefined, b: Value | undefined): boolean {
 }
 
 export function isInt(v: Value | undefined): boolean {
-  // 编译运行时将 Infinity 和 1e21 及以上的数字视为整数，解释器则不这样。
+  // The compiling runtime counts Infinity and numbers of 1e21 or more as integers, and the interpreter does not.
   if (typeof v === 'number') return Number.isNaN(v) ? true : COMPILED ? v === Math.floor(v) : v === parseInt(String(v), 10);
   if (typeof v === 'boolean') return true;
   if (typeof v === 'string') return v.indexOf('.') < 0;
@@ -136,7 +136,7 @@ export function mathop(op: string, v: Value): number {
   return 0;
 }
 
-/** 按原版三角函数的方式四舍五入到 10 位小数：编译代码用 Math.round，解释器用 toFixed。 */
+/** Rounds to 10 decimals, as the original's trigonometry does: the compiled code with Math.round, the interpreter with toFixed. */
 const round10 = COMPILED ? (x: number) => Math.round(x * 1e10) / 1e10 : (x: number) => parseFloat(x.toFixed(10));
 
 function tan(angle: number): number {
@@ -148,7 +148,7 @@ function tan(angle: number): number {
     case 270:
       return -Infinity;
   }
-  // 解释器在取正切前将角度对 360 取模，编译代码不这样做。
+  // The interpreter reduces the angle mod 360 before it takes the tangent, and the compiled code does not.
   return round10(dm.tan((Math.PI * (COMPILED ? angle : angle % 360)) / 180));
 }
 
@@ -159,13 +159,13 @@ export const floor = (v: Value): number => Math.floor(toNumber(v));
 export const ceil = (v: Value): number => Math.ceil(toNumber(v));
 export const sqrt = (v: Value): number => Math.sqrt(toNumber(v));
 
-// ------------------------------------------------------------------ 列表
+// ------------------------------------------------------------------ lists
 
 const LIST_INVALID = -1;
 const LIST_ALL = -2;
 const LIST_ITEM_LIMIT = 200000;
 
-/** 解析列表索引参数；`rand` 为“random”/“any”提供随机源。 */
+/** Resolves a list index argument; `rand` supplies the random source for "random"/"any". */
 function toListIndex(index: Value, len: number, acceptAll: boolean, rand: () => number): number {
   if (typeof index !== 'number') {
     if (index === 'all') return acceptAll ? LIST_ALL : LIST_INVALID;
@@ -184,7 +184,7 @@ export function setListRandom(fn: () => number): void {
   listRandom = fn;
 }
 
-/** 数字或数字字符串索引这一常见情况的快速路径。 */
+/** Fast path for the common case of a numeric or numeric-string index. */
 export function item(list: Value[], index: Value): Value {
   if (typeof index === 'number') {
     const i = Math.floor(index);
@@ -227,14 +227,14 @@ export function insertAt(list: Value[], index: Value, v: Value): void {
 }
 
 /**
- * 按 `compare` 比较后第一个等于 `v` 的项，或 -1。查找项的数字只计算一次。
- * 不是数字的查找项会以忽略大小写的文本与每一项比较，与 `compare` 的行为一致。
+ * The first index whose item equals `v` by `compare`, or -1. The needle's number is worked out once. A needle that
+ * is not a number compares as lowercase text with every item, as `compare` would.
  */
 function findItem(list: Value[], v: Value): number {
   const n2 = Number(v);
   if (Number.isNaN(n2) || (n2 === 0 && isWhiteSpace(v))) {
     const s2 = String(v).toLowerCase();
-    // 转小写会保留 ASCII 文本的长度，因此对于 ASCII 查找项，长度不等即可排除匹配。
+    // Lowercasing keeps the length of text that matches ASCII text, so for an ASCII needle a length mismatch rules a match out.
     const ascii = !/[^\x00-\x7f]/.test(s2);
     for (let i = 0; i < list.length; i++) {
       const item = list[i];
@@ -271,7 +271,7 @@ export function listContents(list: Value[]): string {
   return allSingle ? list.join('') : list.join(' ');
 }
 
-// ------------------------------------------------------------------ 与运行时共享的数学辅助函数
+// ------------------------------------------------------------------ math helpers shared with the runtime
 
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max);
@@ -283,9 +283,9 @@ export function wrapClamp(n: number, min: number, max: number): number {
 }
 
 /**
- * 将项目的逐字母拆分循环合并为一次调用。单词在每个等于 `sep` 的字母处结束
- * （按 `=` 语义）；最后一个分隔符后的文本作为 `word` 返回且不加入列表，
- * `next` 是循环计数器的最终值（输入为空时为“1”）。
+ * The project's letter-by-letter split loop in one call. Words end at each letter equal to `sep`
+ * (with `=` semantics); the text after the last separator is returned as `word` and is not added,
+ * and `next` is the loop counter's final value ("1" when the input is empty).
  */
 export function splitWords(input: Value, sep: Value, list: Value[]): { word: string; next: Value } {
   list.length = 0;
@@ -302,6 +302,6 @@ export function splitWords(input: Value, sep: Value, list: Value[]): { word: str
   return { word, next: s.length === 0 ? '1' : s.length + 1 };
 }
 
-/** 生成代码使用的短名称。 */
+/** Short names used by generated code. */
 export const num = toNumber;
 export const bool = toBoolean;

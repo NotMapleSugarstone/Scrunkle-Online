@@ -1,7 +1,7 @@
 import type { Runtime } from '../engine/runtime.ts';
 import type { MaskSet } from '../engine/masks.ts';
 
-/** 为每个带遮罩造型的皮肤提供打包遮罩。 */
+/** Gives each masked costume's skin its packed mask. */
 export function installSilhouettes(rt: Runtime, set: MaskSet): void {
   for (const sprite of rt.sprites) {
     const list = set[sprite.name];

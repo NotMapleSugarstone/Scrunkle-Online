@@ -1,4 +1,4 @@
-/** 带种子的 32 位生成器。每次 `pick random` 调用一次 `next()`，使所有对端序列一致。 */
+/** Seeded 32-bit generator. One `next()` per `pick random` keeps every peer's sequence identical. */
 export class Rng {
   state: number;
   calls = 0;
