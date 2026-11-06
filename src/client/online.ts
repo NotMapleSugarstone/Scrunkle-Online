@@ -10,6 +10,7 @@ import { report, reportContext } from '../net/report.ts';
 import { fromBase64, toBase64 } from '../net/wire.ts';
 import { loadControls, seatKeys, translateKeys } from './controls.ts';
 import { actionKeys, type Pads } from './pads.ts';
+import { currentFormat, currentText } from './net-text.ts';
 import { seatScreen } from '../game/screens.ts';
 import { Game, startFixedLoop } from './game.ts';
 import type { LocalInput } from './input.ts';
@@ -145,7 +146,7 @@ export class OnlineGame {
 
   private wentOn(seat: number): void {
     this.dropped.add(seat);
-    this.notice = { text: `${this.name(seat)} left the game.`, until: performance.now() + NOTICE_MS };
+    this.notice = { text: currentFormat('leftGame', { name: this.name(seat) }), until: performance.now() + NOTICE_MS };
   }
 
   private dropSeat(seat: number): void {
@@ -202,17 +203,17 @@ export class OnlineGame {
     for (const s of this.start.seats) {
       if (s === this.local || this.dropped.has(s)) continue;
       const link = this.mesh.state(s);
-      parts.push(`${this.name(s)}: ${st.pings[s] ?? '?'} ms ${link === 'relay' ? '(relayed)' : link === 'connecting' ? '(connecting)' : ''}`);
+      parts.push(`${this.name(s)}: ${st.pings[s] ?? '?'} ms ${link === 'relay' ? `(${currentText('relayed')})` : link === 'connecting' ? `(${currentText('hudConnecting')})` : ''}`);
     }
-    parts.push(`rollbacks ${st.rollbacks}`);
+    parts.push(`${currentText('rollbacks')} ${st.rollbacks}`);
     let warn = '';
     // A player whose room socket is reconnecting still plays while their inputs arrive directly.
     const silentAway = [...this.away].filter((s) => (st.silentFor[s] ?? 0) > AWAY_SILENT_MS);
     const stuck = [...new Set([...st.waitingFor, ...silentAway])].filter((s) => !this.dropped.has(s));
-    if (stuck.length) warn = `Waiting for ${stuck.map((s) => this.name(s)).join(', ')}...`;
+    if (stuck.length) warn = currentFormat('waitingFor', { names: stuck.map((s) => this.name(s)).join(', ') });
     const now = performance.now();
     if (!warn && this.notice && now < this.notice.until) warn = this.notice.text;
-    if (st.desync) warn = `Games went out of sync at frame ${st.desync.frame}. Please start a new room.`;
+    if (st.desync) warn = currentFormat('outOfSync', { frame: st.desync.frame });
     if (!stuck.length) this.stuckSince = null;
     else if (this.stuckSince === null) this.stuckSince = now;
     else if (now - this.stuckSince > FREEZE_REPORT_MS && !this.freezeReported) {
@@ -233,8 +234,8 @@ export class OnlineGame {
     const on = stuck.find((s) => !this.dropped.has(s));
     if (on !== undefined && waited > PROMPT_AFTER_S && !st.desync) {
       const who = this.name(on);
-      if (isHost) this.hud.waiting(`Waiting for ${who}`, `Their game has not answered for ${Math.floor(waited)} seconds. It may only be a slow connection.`, { label: `Continue without ${who}`, onClick: () => this.dropSeat(on) });
-      else this.hud.waiting(`Waiting for ${who}`, `Their game has not answered for ${Math.floor(waited)} seconds. ${this.name(this.host)}, the host, can continue without them.`, null);
+      if (isHost) this.hud.waiting(currentFormat('waitingTitle', { name: who }), currentFormat('waitingText', { seconds: Math.floor(waited) }), { label: currentFormat('continueWithout', { name: who }), onClick: () => this.dropSeat(on) });
+      else this.hud.waiting(currentFormat('waitingTitle', { name: who }), currentFormat('waitingTextHost', { seconds: Math.floor(waited), host: this.name(this.host) }), null);
     } else this.hud.waiting(null);
     this.hud.action(null, () => {});
   }

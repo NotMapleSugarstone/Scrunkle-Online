@@ -10,7 +10,8 @@ import { ReplayOffer } from './replay-offer.ts';
 import { loadReplay } from './replay-store.ts';
 import { runReplayViewer, videoType, type VideoOptions, type VideoQuality } from './replay-viewer.ts';
 import { codeFiles, keepSaving, loadSave } from './saves.ts';
-import { DISPLAY_NAMES, loadDisplay, loadWearHats, nextDisplay, saveDisplay, saveWearHats } from './display.ts';
+import { loadDisplay, loadWearHats, nextDisplay, saveDisplay, saveWearHats } from './display.ts';
+import { currentFormat, currentText, displayLabel } from './net-text.ts';
 import { wearHats } from '../game/hats.ts';
 import { Toast } from './toast.ts';
 import { actionKeys, Pads } from './pads.ts';
@@ -118,8 +119,8 @@ function leaveBar(): HTMLElement {
   bar.className = 'hud';
   const leave = document.createElement('button');
   leave.className = 'hud-leave';
-  leave.textContent = 'Leave game';
-  leave.title = 'Back to the start screen';
+  leave.textContent = currentText('leaveGame');
+  leave.title = currentText('backToStart');
   leave.tabIndex = -1;
   leave.addEventListener('mousedown', (e) => e.preventDefault());
   leave.addEventListener('click', () => backToStart());
@@ -193,7 +194,7 @@ const lobby = new Lobby(overlay, {
     const replay = recorder(game.rt.t0, false, []);
     const bar = leaveBar();
     const stopSaving = keepSaving(() => game.rt);
-    const saveCodes = codeFiles((name) => toast.show(`Saved ${name}.`, 4000));
+    const saveCodes = codeFiles((name) => toast.show(currentFormat('saved', { name }), 4000));
     const stopLoop = startFixedLoop(
       () => {
         const p = sampleLocal();
@@ -218,10 +219,10 @@ const lobby = new Lobby(overlay, {
     void watchReplay(id, quality);
   },
   async host(name) {
-    lobby.setStatus('Opening a room...');
+    lobby.setNetStatus('opening');
     const r = await hostRoom();
     if (!r.ok) {
-      lobby.setStatus(r.reason);
+      lobby.setNetReason(r.reason);
       return;
     }
     code = r.code ?? '';
@@ -231,13 +232,13 @@ const lobby = new Lobby(overlay, {
   },
   async join(name, c) {
     if (!/^[A-Z0-9]{6}$/.test(c)) {
-      lobby.setStatus('A room code is six letters and numbers.');
+      lobby.setNetStatus('badCode');
       return;
     }
-    lobby.setStatus('Joining...');
+    lobby.setNetStatus('joining');
     const r = await joinRoom(c);
     if (!r.ok) {
-      lobby.setStatus(r.reason);
+      lobby.setNetReason(r.reason);
       return;
     }
     code = c;
@@ -280,7 +281,7 @@ function setDisplay(mode: typeof display, announce = false): void {
   game.renderer.setDisplay(mode);
   lobby.setDisplay(mode);
   game.present();
-  if (announce) toast.show(`Display: ${DISPLAY_NAMES[mode]}`, 1500);
+  if (announce) toast.show(currentFormat('displayAnnounce', { name: displayLabel(mode) }), 1500);
 }
 setDisplay(display);
 function setWearHats(on: boolean): void {
@@ -317,8 +318,8 @@ function connect(roomId: string, name: string): void {
     // A refused player's socket closes right after the reason arrives, which stays on screen.
     if (client.refusal) return;
     if (s !== 'open') report('room-socket', { status: s, why, inGame: online !== null, ...(online?.diagnostics() ?? {}) });
-    if (s === 'reconnecting') lobby.setStatus('Connection lost; reconnecting...');
-    else if (s === 'closed' && !online) lobby.setStatus('Disconnected from the room.');
+    if (s === 'reconnecting') lobby.setNetStatus('connectionLost');
+    else if (s === 'closed' && !online) lobby.setNetStatus('disconnected');
     else if (s === 'open') lobby.setStatus('');
   };
   room.onMessage = (m) => {
@@ -359,7 +360,7 @@ function connect(roomId: string, name: string): void {
       case 'refused':
         // A room refused to its own host has nobody in it, so its code is withdrawn.
         if (hosting && code) void cancelRoom(code);
-        lobby.setStatus(m.reason);
+        lobby.setNetReason(m.reason);
         lobby.showMenu();
         break;
     }
@@ -370,7 +371,7 @@ function connect(roomId: string, name: string): void {
 function begin(start: StartInfo): void {
   if (!room || !mesh || online) return;
   if (!start.seats.includes(room.seat)) {
-    lobby.setStatus('The game started without you.');
+    lobby.setNetStatus('startedWithout');
     return;
   }
   game.startPrefetch();
@@ -404,16 +405,16 @@ window.addEventListener('unhandledrejection', (e) => report('error', { message: 
 /** Plays a saved replay in place of the start screen, or records it as a video. */
 async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
   if (quality && !videoType()) {
-    lobby.setStatus('This browser cannot record video.');
+    lobby.setStatus(currentText('cannotRecord'));
     return;
   }
   const saved = await loadReplay(id).catch(() => null);
   if (!saved) {
-    lobby.setStatus('This replay is not in this browser anymore.');
+    lobby.setStatus(currentText('replayMissing'));
     return;
   }
   const { meta, body } = saved;
-  const warning = meta.build !== BUILD ? 'A different version of the game saved this replay, so it may not play the same.' : '';
+  const warning = meta.build !== BUILD ? currentText('replayDifferentVersion') : '';
   lobby.hide();
   lobby.setStatus('');
   game.audio.stopAll();
@@ -427,18 +428,18 @@ async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
     done: (file, extension) => {
       const name = `${fileName(replayName(meta))}.${extension}`;
       downloadFile(file, name);
-      toast.show(extension === 'mp4' ? `Saved ${name}.` : `Saved ${name}. This browser records WebM rather than MP4.`, 5000);
+      toast.show(extension === 'mp4' ? currentFormat('saved', { name }) : currentFormat('savedWebm', { name }), 5000);
     },
   };
   stopPlaying = runReplayViewer({ game, meta, body, warning, page, stage: stageWrap, video, onExit: () => backToStart('replays') });
 }
 
 // Every image and sound loads and decodes behind the lobby before the play buttons enable.
-lobby.setLoading(true, 'Loading...');
+lobby.setLoading(true, currentText('loading'));
 void game
   .load(() => {})
   .then(() => {
     lobby.setProgress(1, 1);
     lobby.setLoading(false, '');
   })
-  .catch((e) => lobby.setStatus(`Could not load the game: ${String(e)}`));
+  .catch((e) => lobby.setStatus(currentFormat('couldNotLoad', { error: String(e) })));

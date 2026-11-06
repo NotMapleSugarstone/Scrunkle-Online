@@ -5,6 +5,7 @@ import { loadSnapshot, saveSnapshot, type Snapshot } from '../engine/snapshot.ts
 import { snapshotHash } from '../net/rollback.ts';
 import { startFixedLoop, type Game } from './game.ts';
 import { clock, replayFrames, replayName, type ReplayBody, type ReplayMeta } from './replay.ts';
+import { currentFormat, currentText } from './net-text.ts';
 
 export interface ReplayViewerOptions {
   /** The game, with a fresh runtime made with the replay's `t0`. */
@@ -71,7 +72,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   const { game, body } = o;
   const pageTitle = document.title;
   const bar = el('div', 'hud test-bar replay-bar');
-  const exit = button('Exit', 'Back to the Replays screen (Escape)', () => o.onExit());
+  const exit = button(currentText('exit'), currentText('exitHint'), () => o.onExit());
   exit.classList.add('hud-leave');
   const note = el('div', 'replay-note');
   note.hidden = true;
@@ -108,8 +109,8 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   try {
     loadSnapshot(rt(), body.start);
   } catch {
-    bar.append(el('span', 'hud-line', `Replay: ${replayName(o.meta)}`), exit);
-    tell('This replay cannot play in this version of the game.');
+    bar.append(el('span', 'hud-line', currentFormat('replayPrefix', { name: replayName(o.meta) })), exit);
+    tell(currentText('cannotPlayReplay'));
     return stop;
   }
   game.audio.resync(rt());
@@ -132,7 +133,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
     const want = checks.get(at);
     if (want !== undefined && !mismatch && snapshotHash(saveSnapshot(rt())) !== want) {
       mismatch = true;
-      tell(`From ${clock(at)} on, this replay no longer plays the same as the match did.`);
+      tell(currentFormat('replayMismatch', { time: clock(at) }));
     }
   }
 
@@ -156,17 +157,17 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   }
 
   const time = el('span', 'test-frame');
-  const pause = button('Pause', 'Stop the replay, or play it again (Space)', () => setPaused(!paused));
-  const back = button('Back', 'One frame back (Left arrow)', () => {
+  const pause = button(currentText('pauseAction'), currentText('replayPauseHint'), () => setPaused(!paused));
+  const back = button(currentText('back'), currentText('replayBackHint'), () => {
     setPaused(true);
     seek(at - 1);
   });
-  const step = button('Step', 'One frame forward (Right arrow)', () => {
+  const step = button(currentText('step'), currentText('replayStepHint'), () => {
     setPaused(true);
     if (at < total) advance();
     draw();
   });
-  const rate = button('1x', 'Playback speed', () => {
+  const rate = button('1x', currentText('replaySpeedHint'), () => {
     speed = (speed + 1) % SPEEDS.length;
     update();
   });
@@ -175,9 +176,9 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   seekBar.min = '0';
   seekBar.max = String(total);
   seekBar.tabIndex = -1;
-  seekBar.title = 'Drag to move through the match';
+  seekBar.title = currentText('seekHint');
   seekBar.addEventListener('input', () => seek(Number(seekBar.value)));
-  document.title = `Replay: ${replayName(o.meta)}`;
+  document.title = currentFormat('replayPrefix', { name: replayName(o.meta) });
   bar.append(time, seekBar, pause, back, step, rate, exit);
 
   /** Space, Left and Right control the replay. Returns whether the key was one of them. */
@@ -198,7 +199,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   }
   function update(): void {
     time.textContent = `${clock(at)} / ${clock(total)}`;
-    pause.textContent = paused ? 'Play' : 'Pause';
+    pause.textContent = paused ? currentText('play') : currentText('pauseAction');
     rate.textContent = `${SPEEDS[speed]}x`;
     if (seekBar.value !== String(at)) seekBar.value = String(at);
     bar.classList.toggle('paused', paused);
@@ -222,7 +223,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
         paused = true;
         if (recorder) {
           if (recorder.state === 'recording') finishVideo();
-        } else if (!mismatch) tell('End of the replay. Play starts over.');
+        } else if (!mismatch) tell(currentText('endReplay'));
       }
     },
     () => {
@@ -240,9 +241,9 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
     const quality = VIDEO_QUALITIES[video.quality];
     const type = videoType()!;
     for (const b of [seekBar, pause, back, step, rate]) b.hidden = true;
-    bar.prepend(el('span', 'hud-line', `Recording ${video.quality} video`));
-    exit.textContent = 'Cancel';
-    exit.title = 'Stop recording (Escape)';
+    bar.prepend(el('span', 'hud-line', currentFormat('replayRecording', { quality: video.quality })));
+    exit.textContent = currentText('cancel');
+    exit.title = currentText('cancelRecording');
     if (o.warning) tell(o.warning);
     video.setCanvasSize([quality.width, quality.height]);
     game.present();

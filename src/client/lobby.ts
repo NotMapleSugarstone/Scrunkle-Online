@@ -3,7 +3,7 @@
 import type { SeatInfo } from '../net/protocol.ts';
 import type { LinkState } from '../net/mesh.ts';
 import { cleanName, NAME_MAX, SEATS } from '../net/protocol.ts';
-import { CONTROLS_NOTE, GAME_TITLE, STORAGE_PREFIX } from '../game/page.ts';
+import { GAME_TITLE, STORAGE_PREFIX } from '../game/page.ts';
 import { browserKeyToName } from '../engine/io.ts';
 import { ACTIONS, DEFAULT_KEYS, DEFAULT_TOUCH_BUTTONS, loadControls, loadTouchButtons, saveControls, saveTouchButtons } from './controls.ts';
 import { listControllers } from './pads.ts';
@@ -12,7 +12,7 @@ import { clock, REPLAY_NAME_MAX, replayName, replayTitle, type ReplayMeta } from
 import { deleteReplay, importReplay, listReplays, renameReplay, REPLAY_FILE_TYPE, replayFile } from './replay-store.ts';
 import { VIDEO_QUALITIES, type VideoQuality } from './replay-viewer.ts';
 import { downloadFile, fileName } from './download.ts';
-import { DISPLAY_NAMES } from './display.ts';
+import { actionLabel, currentFormat, currentText, displayLabel, keyLabel, loadNetLang, modeLabel, netFrameDelay, netReason, netText, saveNetLang, type NetLang, type NetTextKey } from './net-text.ts';
 import type { DisplayMode } from '../render/webgl.ts';
 
 const NAME_KEY = `${STORAGE_PREFIX}.name`;
@@ -31,17 +31,10 @@ function loadExport(): { kind: 'mp4' | 'file'; quality: VideoQuality } {
   }
   return { kind: 'mp4', quality: '720p' };
 }
-const NAME_RULE = 'Names use letters, numbers, _ and -, as Scratch usernames do.';
-
 function renderOption(b: HTMLButtonElement, label: string, on: boolean): void {
-  const state = el('span', `lobby-option-state${on ? ' on' : ''}`, on ? 'On' : 'Off');
+  const state = el('span', `lobby-option-state${on ? ' on' : ''}`, on ? currentText('on') : currentText('off'));
   b.replaceChildren(el('span', 'lobby-option-label', label), state);
   b.setAttribute('aria-pressed', String(on));
-}
-
-/** A key name as a button shows it: "space" becomes "Space", "up arrow" becomes "Up arrow". */
-function keyLabel(name: string): string {
-  return name ? name[0].toUpperCase() + name.slice(1) : 'None';
 }
 
 /** A button that shows only an icon, with its name in the tooltip. */
@@ -60,9 +53,9 @@ function iconButton(node: IconNode, label: string, cls = ''): HTMLButtonElement 
 function askDelete(li: HTMLLIElement, name: HTMLElement, question: string, remove: () => Promise<void>, keep: () => void): void {
   const ask = el('div', 'row-ask');
   ask.append(name, el('span', 'row-question', question));
-  const yes = el('button', 'lobby-option mod-delete', 'Delete');
+  const yes = el('button', 'lobby-option mod-delete', currentText('delete'));
   yes.addEventListener('click', () => void remove());
-  const no = el('button', 'lobby-option', 'Keep');
+  const no = el('button', 'lobby-option', currentText('keep'));
   no.addEventListener('click', keep);
   li.classList.add('asking');
   li.replaceChildren(ask, yes, no);
@@ -71,16 +64,16 @@ function askDelete(li: HTMLLIElement, name: HTMLElement, question: string, remov
 
 /** "Online versus, Kitty Forest, 2:31, Oct 20", after the fighters when the replay has a name. */
 function replayDetail(m: ReplayMeta): string {
-  const kind = `${m.online ? 'Online ' : ''}${m.mode.toLowerCase()}`;
+  const kind = `${m.online ? currentText('onlinePrefix') : ''}${modeLabel(m.mode).toLowerCase()}`;
   const when = new Date(m.saved).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return [m.name ? replayTitle(m) : '', `${kind[0].toUpperCase()}${kind.slice(1)}`, m.stage, clock(m.frames), when].filter(Boolean).join(', ');
 }
 
 /** Everything about a replay, for the tooltip on its row. */
 function replayAbout(m: ReplayMeta): string {
-  const who = m.online && m.names.length ? `\nPlayers: ${m.names.join(', ')}` : '';
+  const who = m.online && m.names.length ? `\n${currentText('players')}: ${m.names.join(', ')}` : '';
   const when = new Date(m.saved).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  return `${replayName(m)}\n${replayTitle(m)}, ${m.stage}\n${m.online ? 'Online ' : ''}${m.mode}, ${clock(m.frames)}, saved ${when}${who}`;
+  return `${replayName(m)}\n${replayTitle(m)}, ${m.stage}\n${m.online ? currentText('onlinePrefix') : ''}${modeLabel(m.mode)}, ${clock(m.frames)}, ${currentText('savedOn')} ${when}${who}`;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -137,12 +130,21 @@ export class Lobby {
   private progress: HTMLDivElement;
   private menu: HTMLDivElement;
   private room: HTMLDivElement;
+  private onlineHeading: HTMLDivElement;
+  private nameLabel: HTMLSpanElement;
   private codeOut: HTMLSpanElement;
+  private codeLabel: HTMLSpanElement;
+  private barTitle: HTMLSpanElement;
   private seatList: HTMLUListElement;
   private startBtn: HTMLButtonElement;
   private waitNote: HTMLParagraphElement;
+  private delayLabel: HTMLSpanElement;
+  private leaveBtn: HTMLButtonElement;
   private nameIn: HTMLInputElement;
   private delayIn: HTMLSelectElement;
+  private hostBtn: HTMLButtonElement;
+  private codeIn: HTMLInputElement;
+  private joinBtn: HTMLButtonElement;
   private onlineRows: HTMLElement[];
   private offlineNote: HTMLParagraphElement;
   private loading = true;
@@ -176,7 +178,17 @@ export class Lobby {
   private displayBtn: HTMLButtonElement;
   private hatsBtn: HTMLButtonElement;
   private hatsOn = false;
+  private langBtn: HTMLButtonElement;
+  private lang: NetLang = loadNetLang();
+  private statusKey: NetTextKey | null = null;
+  private statusReason: string | null = null;
+  private roomHost = true;
+  private roomReady = false;
   private noticeView: HTMLDivElement;
+  private noticeHeading: HTMLDivElement;
+  private noticeText: HTMLParagraphElement;
+  private noticeOk: HTMLButtonElement;
+  private noticeBack: HTMLButtonElement;
   /** The Host or Join waiting for the player to accept the online notice. */
   private afterNotice: (() => void) | null = null;
 
@@ -187,13 +199,14 @@ export class Lobby {
 
     this.menu = el('div', 'lobby-menu');
     const nameRow = el('label', 'lobby-field');
-    nameRow.append(el('span', '', 'Name'));
+    this.nameLabel = el('span', '', this.t('name'));
+    nameRow.append(this.nameLabel);
     this.nameIn = el('input');
     this.nameIn.maxLength = NAME_MAX;
     this.nameIn.spellcheck = false;
     this.nameIn.autocomplete = 'off';
     this.nameIn.autocapitalize = 'off';
-    this.nameIn.title = 'Your Scratch username, or player and a number';
+    this.nameIn.title = this.t('nameHint');
     this.nameIn.value = cleanName(load(NAME_KEY, '')) || randomName();
     // Characters a Scratch username cannot hold are dropped as they are typed or pasted.
     this.nameIn.addEventListener('input', () => {
@@ -203,49 +216,49 @@ export class Lobby {
       const at = cleanName(v.slice(0, this.nameIn.selectionStart ?? v.length)).length;
       this.nameIn.value = clean;
       this.nameIn.setSelectionRange(at, at);
-      this.setStatus(NAME_RULE);
+      this.setNetStatus('nameRule');
     });
     nameRow.append(this.nameIn);
-    const localBtn = el('button', 'primary', 'Play offline');
-    const hostBtn = el('button', '', 'Host an online game');
+    const localBtn = el('button', 'primary', this.t('playOffline'));
+    this.hostBtn = el('button', '', this.t('host'));
     const joinRow = el('div', 'lobby-join');
-    const codeIn = el('input');
-    codeIn.placeholder = 'Room code';
-    codeIn.maxLength = 6;
-    codeIn.autocapitalize = 'characters';
-    const joinBtn = el('button', '', 'Join');
-    joinRow.append(codeIn, joinBtn);
-    this.onlineRows = [nameRow, hostBtn, joinRow];
-    this.offlineNote = el('p', 'lobby-note', 'Online play is not set up for this copy of the game.');
+    this.codeIn = el('input');
+    this.codeIn.placeholder = this.t('roomCode');
+    this.codeIn.maxLength = 6;
+    this.codeIn.autocapitalize = 'characters';
+    this.joinBtn = el('button', '', this.t('join'));
+    joinRow.append(this.codeIn, this.joinBtn);
+    this.onlineRows = [nameRow, this.hostBtn, joinRow];
+    this.offlineNote = el('p', 'lobby-note', this.t('offline'));
     this.offlineNote.hidden = true;
-    this.menu.append(localBtn, el('div', 'lobby-heading', 'Online'), nameRow, hostBtn, joinRow, this.offlineNote);
+    this.onlineHeading = el('div', 'lobby-heading', this.t('online'));
+    this.menu.append(localBtn, this.onlineHeading, nameRow, this.hostBtn, joinRow, this.offlineNote);
 
     this.room = el('div', 'lobby-room');
     this.room.hidden = true;
     const bar = el('div', 'lobby-bar');
     this.codeOut = el('span', 'code');
-    const codeCell = el('span', '', 'Code ');
-    codeCell.append(this.codeOut);
-    bar.append(el('span', 'lobby-bar-title', 'Online'), codeCell);
+    this.codeLabel = el('span', '', `${this.t('code')} `);
+    const codeCell = el('span', '');
+    codeCell.append(this.codeLabel, this.codeOut);
+    this.barTitle = el('span', 'lobby-bar-title', this.t('online'));
+    bar.append(this.barTitle, codeCell);
     this.seatList = el('ul', 'lobby-seats');
     const opts = el('div', 'lobby-opts');
     const delayRow = el('label', 'lobby-field');
-    delayRow.append(el('span', '', 'Input delay'));
+    this.delayLabel = el('span', '', this.t('inputDelay'));
+    delayRow.append(this.delayLabel);
     this.delayIn = el('select');
-    for (let d = 0; d <= 4; d++) {
-      const o = el('option', '', `${d} frame${d === 1 ? '' : 's'} (${Math.round((d * 1000) / 30)} ms)`);
-      o.value = String(d);
-      this.delayIn.append(o);
-    }
+    this.updateDelayOptions();
     this.delayIn.value = load(DELAY_KEY, '1');
     delayRow.append(this.delayIn);
     opts.append(delayRow);
-    this.startBtn = el('button', 'primary', 'Start');
-    this.waitNote = el('p', 'lobby-note', 'Waiting for the host to start.');
-    const keysNote = el('p', 'lobby-note', CONTROLS_NOTE);
-    const leaveBtn = el('button', '', 'Leave room');
-    leaveBtn.addEventListener('click', () => this.h.leave());
-    this.room.append(bar, this.seatList, opts, this.startBtn, this.waitNote, keysNote, leaveBtn);
+    this.startBtn = el('button', 'primary', this.t('start'));
+    this.waitNote = el('p', 'lobby-note', this.t('waitHost'));
+    const keysNote = el('p', 'lobby-note', this.t('roomKeysNote'));
+    this.leaveBtn = el('button', '', this.t('leaveRoom'));
+    this.leaveBtn.addEventListener('click', () => this.h.leave());
+    this.room.append(bar, this.seatList, opts, this.startBtn, this.waitNote, keysNote, this.leaveBtn);
 
     this.controlsView = el('div', 'lobby-controls');
     this.controlsView.hidden = true;
@@ -255,7 +268,7 @@ export class Lobby {
       const key = el('button', 'control-key');
       key.addEventListener('click', () => this.capture(i));
       this.keyButtons.push(key);
-      row.append(el('span', '', action), key);
+      row.append(el('span', '', actionLabel(action)), key);
       grid.append(row);
     });
     // The touch buttons in their places on the screen.
@@ -270,10 +283,10 @@ export class Lobby {
     });
     const touchPad = el('div', 'touch-edit-pad');
     touchPad.append(touchFace, touchSmall);
-    this.touchEdit.append(el('p', 'lobby-note', 'Tap two buttons to swap them.'), touchPad);
+    this.touchEdit.append(el('p', 'lobby-note', currentText('tapSwap')), touchPad);
     this.renderTouch();
     // While the touch controls are on, two tabs take the heading's place, so the screen fits without scrolling.
-    this.controlsHeading = el('div', 'lobby-heading', 'Your controls');
+    this.controlsHeading = el('div', 'lobby-heading', currentText('yourControls'));
     this.controlsTabs = el('div', 'controls-tabs');
     const tab = (label: string, which: 'keys' | 'touch'): HTMLButtonElement => {
       const b = el('button', '', label);
@@ -285,13 +298,13 @@ export class Lobby {
       this.controlsTabs.append(b);
       return b;
     };
-    this.keysTabBtn = tab('Keys', 'keys');
-    this.touchTabBtn = tab('Touch buttons', 'touch');
+    this.keysTabBtn = tab(currentText('keys'), 'keys');
+    this.touchTabBtn = tab(currentText('touchButtons'), 'touch');
     this.keysPart = el('div', 'controls-keys');
-    this.keysPart.append(el('p', 'lobby-note', 'Your keys for Player 1 and for your own player online.'), grid);
+    this.keysPart.append(el('p', 'lobby-note', currentText('keysNote')), grid);
     const actions = el('div', 'lobby-actions');
-    const resetBtn = el('button', '', 'Reset to default');
-    const doneBtn = el('button', 'primary', 'Done');
+    const resetBtn = el('button', '', currentText('resetDefaults'));
+    const doneBtn = el('button', 'primary', currentText('done'));
     actions.append(resetBtn, doneBtn);
     this.padNote = el('p', 'lobby-note');
     this.controlsView.append(this.controlsHeading, this.controlsTabs, this.keysPart, this.touchEdit, this.padNote, actions);
@@ -308,8 +321,8 @@ export class Lobby {
     this.replaysView.hidden = true;
     this.replayList = el('ul', 'mod-list replay-list');
     const replayActions = el('div', 'lobby-actions');
-    const upload = el('button', '', 'Upload');
-    upload.title = `Add ${REPLAY_FILE_TYPE} replay files`;
+    const upload = el('button', '', currentText('upload'));
+    upload.title = `${currentText('upload')} ${REPLAY_FILE_TYPE}`;
     const replayPick = el('input');
     replayPick.type = 'file';
     replayPick.accept = REPLAY_FILE_TYPE;
@@ -330,31 +343,33 @@ export class Lobby {
       this.setStatus(problems.join(' '));
       await this.refreshReplays();
     });
-    const replaysDone = el('button', 'primary', 'Done');
+    const replaysDone = el('button', 'primary', currentText('done'));
     replaysDone.addEventListener('click', () => this.show('menu'));
     replayActions.append(upload, replaysDone, replayPick);
-    this.replaysView.append(el('div', 'lobby-heading', 'Replays'), this.replayList, replayActions);
+    this.replaysView.append(el('div', 'lobby-heading', currentText('replays')), this.replayList, replayActions);
 
     // Shown before the first Host or Join in this browser.
     this.noticeView = el('div', 'lobby-controls');
     this.noticeView.hidden = true;
-    const noticeOk = el('button', 'primary', 'I understand');
-    const noticeBack = el('button', '', 'Cancel');
+    this.noticeOk = el('button', 'primary', this.t('understand'));
+    this.noticeBack = el('button', '', this.t('cancel'));
     const noticeActions = el('div', 'lobby-actions');
-    noticeActions.append(noticeOk, noticeBack);
+    noticeActions.append(this.noticeOk, this.noticeBack);
+    this.noticeHeading = el('div', 'lobby-heading', this.t('noticeTitle'));
+    this.noticeText = el('p', 'lobby-note', this.t('notice'));
     this.noticeView.append(
-      el('div', 'lobby-heading', 'Playing online'),
-      el('p', 'lobby-note', "Online games connect you straight to the other players in your room (peer to peer, through WebRTC). This means you and they can see each other's IP addresses. Only play online with people you are comfortable sharing that with."),
+      this.noticeHeading,
+      this.noticeText,
       noticeActions,
     );
-    noticeOk.addEventListener('click', () => {
+    this.noticeOk.addEventListener('click', () => {
       store(ONLINE_NOTICE_KEY, '1');
       const go = this.afterNotice;
       this.afterNotice = null;
       this.show('menu');
       go?.();
     });
-    noticeBack.addEventListener('click', () => {
+    this.noticeBack.addEventListener('click', () => {
       this.afterNotice = null;
       this.show('menu');
     });
@@ -362,25 +377,28 @@ export class Lobby {
     this.status = el('div', 'lobby-status');
     this.progress = el('div', 'lobby-progress');
     panel.append(this.menu, this.room, this.controlsView, this.replaysView, this.noticeView, this.status, this.progress);
-    this.replaysBtn = el('button', 'lobby-option', 'Replays');
+    this.replaysBtn = el('button', 'lobby-option', currentText('replays'));
     this.replaysBtn.addEventListener('click', () => this.openReplays());
-    this.controlsBtn = el('button', 'lobby-option', 'Controls');
+    this.controlsBtn = el('button', 'lobby-option', currentText('controls'));
     this.controlsBtn.addEventListener('click', () => this.openControls());
     this.touchBtn = el('button', 'lobby-option');
     this.touchBtn.addEventListener('click', () => this.h.touchControls(!this.touchOn));
     this.setTouch(false);
     this.displayBtn = el('button', 'lobby-option');
-    this.displayBtn.title = 'F2: next display mode';
+    this.displayBtn.title = this.t('displayHint');
     this.displayBtn.addEventListener('click', () => this.h.nextDisplay());
     this.setDisplay('smooth');
     this.hatsBtn = el('button', 'lobby-option');
-    this.hatsBtn.title = "Each fighter's hat sits on its head and turns with it";
+    this.hatsBtn.title = this.t('wearHatsHint');
     this.hatsBtn.addEventListener('click', () => this.h.wearHats(!this.hatsOn));
     this.setWearHats(false);
+    this.langBtn = el('button', 'lobby-option');
+    this.langBtn.addEventListener('click', () => this.setLanguage(this.lang === 'zh' ? 'en' : 'zh'));
+    this.renderLanguage();
     // The footer keeps these out of the panel's way on short screens.
     const footer = el('div', 'lobby-footer');
     const left = el('div', 'lobby-footer-left');
-    left.append(this.replaysBtn, this.touchBtn, this.displayBtn, this.hatsBtn);
+    left.append(this.replaysBtn, this.touchBtn, this.displayBtn, this.hatsBtn, this.langBtn);
     void this.refreshReplays();
     footer.append(left, this.controlsBtn);
     this.root.append(panel, footer);
@@ -388,16 +406,16 @@ export class Lobby {
     window.addEventListener('keydown', (e) => this.onCaptureKey(e), true);
 
     localBtn.addEventListener('click', () => !this.loading && this.h.local());
-    hostBtn.addEventListener('click', () => {
+    this.hostBtn.addEventListener('click', () => {
       const name = this.name();
       if (name) this.online(() => this.h.host(name));
     });
     const join = () => {
       const name = this.name();
-      if (name) this.online(() => this.h.join(name, codeIn.value.trim().toUpperCase()));
+      if (name) this.online(() => this.h.join(name, this.codeIn.value.trim().toUpperCase()));
     };
-    joinBtn.addEventListener('click', join);
-    codeIn.addEventListener('keydown', (e) => e.key === 'Enter' && join());
+    this.joinBtn.addEventListener('click', join);
+    this.codeIn.addEventListener('keydown', (e) => e.key === 'Enter' && join());
     this.startBtn.addEventListener('click', () => {
       store(DELAY_KEY, this.delayIn.value);
       this.h.start(Number(this.delayIn.value));
@@ -407,10 +425,64 @@ export class Lobby {
     this.root.addEventListener('keyup', (e) => e.stopPropagation());
   }
 
+  private t(key: NetTextKey): string {
+    return netText(this.lang, key);
+  }
+
+  private setLanguage(lang: NetLang): void {
+    if (lang === this.lang) return;
+    const name = cleanName(this.nameIn.value);
+    if (name) store(NAME_KEY, name);
+    this.lang = lang;
+    saveNetLang(lang);
+    window.location.reload();
+  }
+
+  private renderLanguage(): void {
+    this.nameLabel.textContent = this.t('name');
+    this.nameIn.title = this.t('nameHint');
+    this.hostBtn.textContent = this.t('host');
+    this.codeIn.placeholder = this.t('roomCode');
+    this.joinBtn.textContent = this.t('join');
+    this.onlineHeading.textContent = this.t('online');
+    this.offlineNote.textContent = this.t('offline');
+    this.codeLabel.textContent = `${this.t('code')} `;
+    this.barTitle.textContent = this.t('online');
+    this.delayLabel.textContent = this.t('inputDelay');
+    this.updateDelayOptions();
+    this.startBtn.textContent = this.t('start');
+    this.updateWaitNote();
+    this.leaveBtn.textContent = this.t('leaveRoom');
+    this.noticeHeading.textContent = this.t('noticeTitle');
+    this.noticeText.textContent = this.t('notice');
+    this.noticeOk.textContent = this.t('understand');
+    this.noticeBack.textContent = this.t('cancel');
+    this.langBtn.replaceChildren(el('span', 'lobby-option-label', this.t('language')), el('span', 'lobby-option-state', this.lang === 'zh' ? '中文' : 'EN'));
+    this.langBtn.title = this.t('switchLanguage');
+    this.langBtn.setAttribute('aria-label', this.langBtn.title);
+    if (this.statusKey) this.writeStatus(this.t(this.statusKey));
+    else if (this.statusReason !== null) this.writeStatus(netReason(this.lang, this.statusReason));
+  }
+
+  private updateDelayOptions(): void {
+    const selected = this.delayIn.value;
+    this.delayIn.replaceChildren(...Array.from({ length: 5 }, (_, d) => {
+      const option = el('option', '', netFrameDelay(this.lang, d));
+      option.value = String(d);
+      return option;
+    }));
+    this.delayIn.value = selected;
+  }
+
+  private updateWaitNote(): void {
+    this.waitNote.hidden = this.roomHost && this.roomReady;
+    this.waitNote.textContent = this.roomHost ? this.t('waitJoin') : this.t('waitHost');
+  }
+
   private name(): string | null {
     const name = cleanName(this.nameIn.value);
     if (!name) {
-      this.setStatus(NAME_RULE);
+      this.setNetStatus('nameRule');
       return null;
     }
     store(NAME_KEY, name);
@@ -430,12 +502,30 @@ export class Lobby {
   }
 
   setStatus(text: string): void {
+    this.statusKey = null;
+    this.statusReason = null;
+    this.writeStatus(text);
+  }
+
+  setNetStatus(key: NetTextKey): void {
+    this.statusKey = key;
+    this.statusReason = null;
+    this.writeStatus(this.t(key));
+  }
+
+  setNetReason(reason: string): void {
+    this.statusKey = null;
+    this.statusReason = reason;
+    this.writeStatus(netReason(this.lang, reason));
+  }
+
+  private writeStatus(text: string): void {
     this.status.textContent = text;
   }
 
   /** The asset warm-up count under the menu, gone once everything has loaded. */
   setProgress(done: number, total: number): void {
-    const text = done >= total ? '' : `Loading images and sounds: ${Math.floor((done / total) * 100)}%`;
+    const text = done >= total ? '' : currentFormat('loadingAssets', { percent: Math.floor((done / total) * 100) });
     if (this.progress.textContent !== text) this.progress.textContent = text;
   }
 
@@ -478,6 +568,7 @@ export class Lobby {
     this.replaysBtn.hidden = view !== 'menu';
     this.displayBtn.hidden = view !== 'menu';
     this.hatsBtn.hidden = view !== 'menu';
+    this.langBtn.hidden = view !== 'menu';
     this.controlsBtn.hidden = view === 'controls' || view === 'replays' || view === 'notice';
     this.root.classList.toggle('in-room', view === 'room');
   }
@@ -489,9 +580,9 @@ export class Lobby {
 
   private async refreshReplays(): Promise<void> {
     const all = await listReplays();
-    this.replaysBtn.replaceChildren(el('span', 'lobby-option-label', 'Replays'), el('span', `lobby-option-state${all.length ? ' on' : ''}`, all.length ? String(all.length) : 'None'));
+    this.replaysBtn.replaceChildren(el('span', 'lobby-option-label', this.t('replays')), el('span', `lobby-option-state${all.length ? ' on' : ''}`, all.length ? String(all.length) : this.t('none')));
     this.replayList.replaceChildren(...all.map((m) => this.replayRow(m)));
-    if (!all.length) this.replayList.append(el('li', 'lobby-note', 'No replays yet. After a match the game asks whether to save one.'));
+    if (!all.length) this.replayList.append(el('li', 'lobby-note', this.t('noReplays')));
   }
 
   private replayRow(m: ReplayMeta): HTMLLIElement {
@@ -500,16 +591,16 @@ export class Lobby {
     const name = el('span', 'mod-name', replayName(m));
     what.title = replayAbout(m);
     what.append(name, el('span', 'replay-detail', replayDetail(m)));
-    const rename = iconButton(Pencil, 'Rename');
+    const rename = iconButton(Pencil, this.t('rename'));
     rename.addEventListener('click', () => this.rename(m, name));
-    const watch = iconButton(Play, 'Watch');
+    const watch = iconButton(Play, this.t('watch'));
     watch.addEventListener('click', () => this.h.watch(m.id));
-    const del = iconButton(Trash2, 'Delete', 'mod-delete');
+    const del = iconButton(Trash2, this.t('delete'), 'mod-delete');
     del.addEventListener('click', () =>
       askDelete(
         li,
         name,
-        'Delete this replay?',
+        this.t('deleteReplay'),
         async () => {
           await deleteReplay(m.id);
           await this.refreshReplays();
@@ -517,7 +608,7 @@ export class Lobby {
         () => li.replaceWith(this.replayRow(m)),
       ),
     );
-    const save = iconButton(Download, 'Download');
+    const save = iconButton(Download, this.t('download'));
     save.addEventListener('click', () => this.askDownload(m, li, name));
     li.append(what, rename, watch, save, del);
     return li;
@@ -535,12 +626,12 @@ export class Lobby {
     };
     const kinds = el('div', 'export-kind');
     const mp4 = el('button', 'lobby-option', 'MP4');
-    mp4.title = 'A video of the replay';
+    mp4.title = this.t('videoOfReplay');
     const file = el('button', 'lobby-option', REPLAY_FILE_TYPE.slice(1).toUpperCase());
-    file.title = 'The replay as a file another player can upload';
+    file.title = this.t('replayFile');
     kinds.append(mp4, file);
     const quality = el('select', 'export-quality');
-    quality.title = 'Video quality';
+    quality.title = this.t('videoQuality');
     for (const q of Object.keys(VIDEO_QUALITIES)) quality.append(new Option(q, q));
     quality.value = pick.quality;
     const render = () => {
@@ -559,7 +650,7 @@ export class Lobby {
       pick.quality = quality.value as VideoQuality;
       keep();
     });
-    const go = iconButton(Download, 'Download');
+    const go = iconButton(Download, this.t('download'));
     go.addEventListener('click', async () => {
       li.replaceWith(this.replayRow(m));
       if (pick.kind === 'mp4') {
@@ -569,7 +660,7 @@ export class Lobby {
       const blob = await replayFile(m.id);
       if (blob) downloadFile(blob, `${fileName(replayName(m))}${REPLAY_FILE_TYPE}`);
     });
-    const cancel = iconButton(X, 'Cancel');
+    const cancel = iconButton(X, this.t('cancel'));
     cancel.addEventListener('click', () => li.replaceWith(this.replayRow(m)));
     render();
     li.classList.add('choosing');
@@ -614,8 +705,8 @@ export class Lobby {
     const all = listControllers();
     const used = all.filter((c) => c.used).map((c) => c.name);
     const other = all.filter((c) => !c.used).map((c) => c.name);
-    let text = used.length ? `${used.length > 1 ? 'Controllers' : 'Controller'}: ${used.join(', ')}.` : 'No controller found. Connect one and press a button on it.';
-    if (other.length) text += ` Not used: ${other.join(', ')}.`;
+    let text = used.length ? `${used.length > 1 ? this.t('controllers') : this.t('controller')}: ${used.join(', ')}.` : this.t('noController');
+    if (other.length) text += ` ${this.t('notUsed')}: ${other.join(', ')}.`;
     if (this.padNote.textContent !== text) this.padNote.textContent = text;
   }
 
@@ -652,7 +743,7 @@ export class Lobby {
 
   private renderKeys(): void {
     this.keyButtons.forEach((b, i) => {
-      const label = i === this.capturing ? 'Press a key' : keyLabel(this.controls[i]);
+      const label = i === this.capturing ? this.t('pressKey') : keyLabel(this.controls[i]);
       b.textContent = label;
       b.title = label;
       b.classList.toggle('capturing', i === this.capturing);
@@ -663,18 +754,18 @@ export class Lobby {
   /** Shows whether the touch controls are on. They decide that from the saved choice or the device. */
   setTouch(on: boolean): void {
     this.touchOn = on;
-    renderOption(this.touchBtn, 'Touch controls', on);
+    renderOption(this.touchBtn, this.t('touchControls'), on);
     this.renderControlsTab();
   }
 
   setDisplay(mode: DisplayMode): void {
-    const state = el('span', `lobby-option-state${mode === 'smooth' ? '' : ' on'}`, DISPLAY_NAMES[mode]);
-    this.displayBtn.replaceChildren(el('span', 'lobby-option-label', 'Display'), state);
+    const state = el('span', `lobby-option-state${mode === 'smooth' ? '' : ' on'}`, displayLabel(mode));
+    this.displayBtn.replaceChildren(el('span', 'lobby-option-label', this.t('display')), state);
   }
 
   setWearHats(on: boolean): void {
     this.hatsOn = on;
-    renderOption(this.hatsBtn, 'Actually wear hats', on);
+    renderOption(this.hatsBtn, this.t('wearHats'), on);
   }
 
   /** Picks the first touch button of a swap, or swaps its action with the one picked before. */
@@ -699,7 +790,7 @@ export class Lobby {
 
   private renderTouch(): void {
     this.touchPicks.forEach((b, i) => {
-      b.textContent = this.touchButtons[i];
+      b.textContent = actionLabel(this.touchButtons[i]);
       b.classList.toggle('picked', i === this.picked);
       b.setAttribute('aria-pressed', String(i === this.picked));
     });
@@ -715,16 +806,16 @@ export class Lobby {
       const li = el('li', `seat${info ? '' : ' seat-open'}`);
       li.style.setProperty('--c', `var(--p${s + 1})`);
       li.append(el('span', 'seat-tag', `P${s + 1}`));
-      if (!info) li.append(el('span', 'seat-empty', 'Open'));
+      if (!info) li.append(el('span', 'seat-empty', this.t('open')));
       else {
         li.append(el('span', 'seat-name', info.name));
-        if (s === local) li.append(el('span', 'seat-link', 'you'));
-        else if (!info.connected) li.append(el('span', 'seat-link', 'reconnecting'));
+        if (s === local) li.append(el('span', 'seat-link', this.t('you')));
+        else if (!info.connected) li.append(el('span', 'seat-link', this.t('reconnecting')));
         else {
           const state = links(s);
-          if (state) li.append(el('span', `seat-link ${state}`, state === 'direct' ? 'direct link' : state === 'relay' ? 'relayed' : 'connecting'));
+          if (state) li.append(el('span', `seat-link ${state}`, state === 'direct' ? this.t('direct') : state === 'relay' ? this.t('relay') : this.t('connecting')));
         }
-        if (s === host) li.append(el('span', 'seat-link', 'host'));
+        if (s === host) li.append(el('span', 'seat-link', this.t('hostTag')));
       }
       items.push(li);
     }
@@ -733,8 +824,9 @@ export class Lobby {
     const ready = seats.filter((x) => x.connected).length >= 2;
     this.startBtn.hidden = !isHost;
     this.startBtn.disabled = !ready;
-    this.waitNote.hidden = isHost && ready;
-    this.waitNote.textContent = isHost ? 'Waiting for another player to join with the code.' : 'Waiting for the host to start.';
+    this.roomHost = isHost;
+    this.roomReady = ready;
+    this.updateWaitNote();
   }
 
   hide(): void {

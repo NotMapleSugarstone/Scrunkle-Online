@@ -2,6 +2,7 @@
 // The game goes on underneath, and the buttons never take keyboard focus.
 import { clock, type FinishedReplay } from './replay.ts';
 import { saveReplay } from './replay-store.ts';
+import { currentFormat, currentText } from './net-text.ts';
 import type { Toast } from './toast.ts';
 
 function button(text: string, cls: string, onClick: () => void): HTMLButtonElement {
@@ -30,8 +31,8 @@ export class ReplayOffer {
     const actions = document.createElement('div');
     actions.className = 'replay-offer-actions';
     actions.append(
-      button('Save replay', 'primary', () => void this.save()),
-      button('No thanks', '', () => this.clear()),
+      button(currentText('saveReplay'), 'primary', () => void this.save()),
+      button(currentText('noThanks'), '', () => this.clear()),
     );
     this.el.append(this.text, actions);
     stage.append(this.el);
@@ -39,7 +40,7 @@ export class ReplayOffer {
 
   offer(r: FinishedReplay): void {
     this.pending = r;
-    this.text.textContent = `Save a replay of ${r.meta.fighters.join(' vs ')} (${clock(r.meta.frames)})?`;
+    this.text.textContent = currentFormat('saveReplayQuestion', { fighters: r.meta.fighters.join(' vs '), time: clock(r.meta.frames) });
     this.el.hidden = false;
   }
 
@@ -55,9 +56,9 @@ export class ReplayOffer {
     if (!r) return;
     try {
       await saveReplay(r);
-      this.toast.show('Replay saved under Replays on the start screen.', 4000);
+      this.toast.show(currentText('replaySaved'), 4000);
     } catch (e) {
-      this.toast.show(`The replay could not be saved: ${e instanceof Error ? e.message : String(e)}`, 6000);
+      this.toast.show(currentFormat('replaySaveFailed', { error: e instanceof Error ? e.message : String(e) }), 6000);
     }
   }
 }

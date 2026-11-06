@@ -5,6 +5,7 @@
 import { ACTIONS, DEFAULT_TOUCH_BUTTONS, loadTouchButtons } from './controls.ts';
 import { DOWN, LEFT, RIGHT, UP, type Pads } from './pads.ts';
 import { STORAGE_PREFIX } from '../game/page.ts';
+import { actionLabel } from './net-text.ts';
 
 /** Share of the joystick's radius the thumb must move before it counts as a direction. */
 const STICK_DEADZONE = 0.3;
@@ -199,7 +200,7 @@ export class TouchControls {
     this.pads.releaseAll();
     this.slots.forEach((s, i) => {
       s.action = ACTIONS.indexOf(names[i]);
-      s.b.textContent = names[i];
+      s.b.textContent = actionLabel(names[i]);
       s.b.classList.remove('down');
     });
   }
