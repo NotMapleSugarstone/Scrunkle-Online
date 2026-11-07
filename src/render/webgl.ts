@@ -37,6 +37,8 @@ interface Target {
 const SMOOTH_RATE = 0.45;
 const SMOOTH_SNAP = 90;
 const MIP_OFFSET = 8;
+/** 同时进行的图像请求数；提高它可缩短冷缓存启动时间。 */
+const LOAD_CONCURRENCY = 32;
 
 interface Program {
   prog: WebGLProgram;
@@ -178,13 +180,16 @@ export class WebGLRenderer {
   // ---------------------------------------------------------------- 资源
 
   private base = '';
+  private assetSuffix = '';
   /** 按皮肤索引：0 未请求，1 已排队或加载中，2 已加载。 */
   private loadState: Uint8Array = new Uint8Array(0);
   private urgent: number[] = [];
   private immediate: number[] = [];
+  private background: number[] = [];
   private nextBackground = 0;
   private loading = 0;
   private loaded = 0;
+  private inflight = new Set<number>();
   private onProgress?: (done: number, total: number) => void;
 
   /**
@@ -192,8 +197,9 @@ export class WebGLRenderer {
    * 每张图像到达时创建其纹理，因此首次显示它的帧无需解码或上传。图像到达前就被绘制的皮肤
    * 会接下来加载，在此之前绘制为空白。
    */
-  startLoading(base: string, effects: number[], onProgress?: (done: number, total: number) => void): void {
+  startLoading(base: string, effects: number[], onProgress?: (done: number, total: number) => void, assetSuffix = ''): void {
     this.base = base;
+    this.assetSuffix = assetSuffix;
     this.onProgress = onProgress;
     this.loadState = new Uint8Array(this.skins.length);
     for (const bits of [0, ...effects]) this.program(false, bits);
@@ -202,11 +208,31 @@ export class WebGLRenderer {
     this.pump();
   }
 
-  /** 给定皮肤加载完成后 resolve，用于首屏。 */
-  loadNow(skins: number[]): Promise<void> {
-    for (const i of skins) this.want(i);
+  /** 低优先级预取；只在当前画面、比赛和过场请求之后处理。 */
+  loadLater(skins: number[]): void {
+    for (const i of new Set(skins)) {
+      if (this.loadState[i] !== 0) continue;
+      this.loadState[i] = 1;
+      this.background.push(i);
+    }
+    this.pump();
+  }
+
+  /** 给定皮肤加载完成后 resolve，并报告该集合的进度；这些图像会抢先于后台队列。 */
+  loadNow(skins: number[], onProgress?: (done: number, total: number) => void): Promise<void> {
+    const unique = [...new Set(skins)];
+    for (const i of unique) this.want(i, true);
+    const loaded = () => unique.reduce((n, i) => n + (this.loadState[i] === 2 ? 1 : 0), 0);
+    const report = () => onProgress?.(loaded(), unique.length);
+    report();
     return new Promise((resolve) => {
-      const check = () => !skins.some((i) => this.loadState[i] !== 2) && (resolve(), true);
+      const check = () => {
+        const done = loaded();
+        onProgress?.(done, unique.length);
+        if (done < unique.length) return false;
+        resolve();
+        return true;
+      };
       if (!check()) this.waiters.push(check);
     });
   }
@@ -232,16 +258,36 @@ export class WebGLRenderer {
   }
 
   private want(i: number, priority = false): void {
-    if (this.loadState.length === 0 || this.loadState[i] !== 0) return;
-    this.loadState[i] = 1;
-    (priority ? this.immediate : this.urgent).push(i);
-    this.pump();
+    if (this.loadState.length === 0 || this.loadState[i] === 2) return;
+    if (this.loadState[i] === 0) {
+      this.loadState[i] = 1;
+      (priority ? this.immediate : this.urgent).push(i);
+      this.pump();
+      return;
+    }
+    // 当前画面要用的图像可能已经在后台队列里。把它提到最前面，避免菜单空白
+    // 等待整个模式预取队列；已经在加载中的图像不重复排队。
+    if (priority && !this.inflight.has(i) && !this.immediate.includes(i)) {
+      for (const queue of [this.urgent, this.background]) {
+        const at = queue.indexOf(i);
+        if (at >= 0) queue.splice(at, 1);
+      }
+      this.immediate.push(i);
+      this.pump();
+    }
   }
 
   private pump(): void {
-    while (this.loading < 16) {
+    while (this.loading < LOAD_CONCURRENCY) {
+      // 只有当前画面主动请求的图像才提前上传纹理。背景预取只解码图像；
+      // 为两千张不可见图像同步 prepare 会明显阻塞主线程。
+      let eager = true;
       let i = this.immediate.shift();
-      if (i === undefined) i = this.urgent.shift();
+      if (i === undefined) {
+        eager = false;
+        i = this.urgent.shift();
+      }
+      if (i === undefined) i = this.background.shift();
       if (i === undefined) {
         while (this.nextBackground < this.skins.length && this.loadState[this.nextBackground] !== 0) this.nextBackground++;
         if (this.nextBackground >= this.skins.length) return;
@@ -249,13 +295,17 @@ export class WebGLRenderer {
         this.loadState[i] = 1;
       }
       const idx = i;
+      // 同一张图像可能同时被后台队列和当前画面请求；只加载一次。
+      if (this.loadState[idx] === 2 || this.inflight.has(idx)) continue;
       const file = this.skins[idx].file;
       this.loading++;
-      loadImage(/^(blob|data|https?):/.test(file) ? file : `${this.base}${file}`)
+      this.inflight.add(idx);
+      loadImage(/^(blob|data|https?):/.test(file) ? file : `${this.base}${file}${this.assetSuffix}`, eager)
         .then((img) => (this.images[idx] = img), () => (this.images[idx] = null))
         .finally(() => {
-          if (this.images[idx]) this.prepare(idx);
+          if (this.images[idx] && eager) this.prepare(idx);
           this.loadState[idx] = 2;
+          this.inflight.delete(idx);
           this.loading--;
           this.loaded++;
           this.onProgress?.(this.loaded, this.skins.length);
@@ -739,9 +789,9 @@ function stampBounds(_geom: RenderModel, skin: SkinDef, d: DrawState): { left: n
   return { left, right, bottom, top };
 }
 
-function loadImage(url: string): Promise<HTMLImageElement> {
-  if (/\.svg$/i.test(url) && !/^(blob|data):/.test(url)) return loadSvg(url);
-  return imageFrom(url, true);
+function loadImage(url: string, decode = true): Promise<HTMLImageElement> {
+  if (/\.svg$/i.test(url) && !/^(blob|data):/.test(url)) return loadSvg(url, decode);
+  return imageFrom(url, decode);
 }
 
 /** `decode()` 的最长等待时间；页面不渲染时（如后台标签页）它永不结束。 */
@@ -774,7 +824,8 @@ const fontCache = new Map<string, Promise<string>>();
  * 恢复字体后加载矢量造型。图像无法自行获取字体，因此每个造型内嵌原加载器写入的字体。
  * 资源文件夹为每种字体只保留一份副本。
  */
-async function loadSvg(url: string): Promise<HTMLImageElement> {
+async function loadSvg(url: string, decode = true): Promise<HTMLImageElement> {
+  const query = url.includes('?') ? url.slice(url.indexOf('?')) : '';
   let text = await fetch(url).then((r) => {
     if (!r.ok) throw new Error(`failed to load ${url}`);
     return r.text();
@@ -783,14 +834,14 @@ async function loadSvg(url: string): Promise<HTMLImageElement> {
   if (ids.length > 0) {
     const fontBase = url.replace(/costumes\/[^/]+$/, 'fonts/');
     for (const id of ids) {
-      if (!fontCache.has(id)) fontCache.set(id, fetch(`${fontBase}${id}.txt`).then((r) => r.text()));
+      if (!fontCache.has(id)) fontCache.set(id, fetch(`${fontBase}${id}.txt${query}`).then((r) => r.text()));
       const data = await fontCache.get(id)!;
       text = text.split(`cbfont:${id}`).join(data);
     }
   }
   const blobUrl = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }));
   try {
-    return await imageFrom(blobUrl);
+    return await imageFrom(blobUrl, decode);
   } finally {
     URL.revokeObjectURL(blobUrl);
   }

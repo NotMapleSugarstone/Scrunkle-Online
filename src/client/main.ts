@@ -16,7 +16,7 @@ import { wearHats } from '../game/hats.ts';
 import { Toast } from './toast.ts';
 import { actionKeys, Pads } from './pads.ts';
 import { TouchControls } from './touch.ts';
-import { seatScreen } from '../game/screens.ts';
+import { inMatch, seatScreen } from '../game/screens.ts';
 import { pauseRule } from '../game/pause.ts';
 import { STORAGE_PREFIX } from '../game/page.ts';
 import { Mesh } from '../net/mesh.ts';
@@ -117,6 +117,8 @@ function backToStart(view: 'menu' | 'replays' = 'menu'): void {
 function leaveBar(): HTMLElement {
   const bar = document.createElement('div');
   bar.className = 'hud';
+  const end = document.createElement('div');
+  end.className = 'hud-end';
   const leave = document.createElement('button');
   leave.className = 'hud-leave';
   leave.textContent = currentText('leaveGame');
@@ -124,7 +126,8 @@ function leaveBar(): HTMLElement {
   leave.tabIndex = -1;
   leave.addEventListener('mousedown', (e) => e.preventDefault());
   leave.addEventListener('click', () => backToStart());
-  bar.append(leave);
+  end.append(leave);
+  bar.append(end);
   page.append(bar);
   return bar;
 }
@@ -180,9 +183,12 @@ function applyCutsceneDefault(rt: Game['rt']): void {
 }
 
 const lobby = new Lobby(overlay, {
-  local() {
+  async local() {
     game.startPrefetch();
+    // 等待进入游戏后新出现的可见图像；不显示加载画面，完成后再收起大厅。
+    await withLoading((progress) => game.preloadCurrentView(progress));
     lobby.hide();
+    game.present();
     input.enabled = true;
     // 先加载浏览器中的存档，控制设置中的按键会覆盖玩家 1 的已保存按键。
     loadSave(game.rt);
@@ -195,18 +201,62 @@ const lobby = new Lobby(overlay, {
     const bar = leaveBar();
     const stopSaving = keepSaving(() => game.rt);
     const saveCodes = codeFiles((name) => toast.show(currentFormat('saved', { name }), 4000));
+    let fightLoading = false;
+    let fightReady = false;
+    let readyFighters = '';
+    let readyCutscene = '';
+    let stopped = false;
     const stopLoop = startFixedLoop(
       () => {
+        // 比赛第一帧等待图像时，模拟保持不动。
+        if (fightLoading) return;
         const p = sampleLocal();
         game.step([p]);
         replay.frame([p], runtimeState(game.rt));
       },
       () => {
-        game.present();
-        saveCodes(game.rt);
+        if (!inMatch(game.rt)) {
+          fightReady = false;
+          readyFighters = '';
+          readyCutscene = '';
+          game.present();
+          saveCodes(game.rt);
+          return;
+        }
+        const fighters = game.fighterKey();
+        const cutscene = game.cutsceneActive() ? game.cutsceneKey() : '';
+        if (!cutscene) readyCutscene = '';
+        if (fightReady && fighters === readyFighters && (!cutscene || cutscene === readyCutscene)) {
+          game.present();
+          saveCodes(game.rt);
+          return;
+        }
+        if (fightLoading) return;
+        fightLoading = true;
+        const fighterChanged = !fightReady || fighters !== readyFighters;
+        const cutsceneChanged = !!cutscene && cutscene !== readyCutscene;
+        const load = async (progress: (done: number, total: number) => void) => {
+          if (fighterChanged) {
+            await game.preloadForFight(cutsceneChanged ? () => {} : progress);
+          }
+          if (cutsceneChanged) await game.preloadForCutscene(progress);
+        };
+        void withLoading(load)
+          .catch((e) => toast.show(currentFormat('couldNotLoad', { error: String(e) }), 4000))
+          .finally(() => {
+            fightReady = true;
+            readyFighters = fighters;
+            readyCutscene = cutscene;
+            fightLoading = false;
+            if (!stopped) {
+              game.present();
+              saveCodes(game.rt);
+            }
+          });
       },
     );
     stopPlaying = () => {
+      stopped = true;
       stopLoop();
       stopSaving();
       bar.remove();
@@ -219,6 +269,7 @@ const lobby = new Lobby(overlay, {
     void watchReplay(id, quality);
   },
   async host(name) {
+    if (!(await prepareToPlay())) return;
     lobby.setNetStatus('opening');
     const r = await hostRoom();
     if (!r.ok) {
@@ -227,7 +278,6 @@ const lobby = new Lobby(overlay, {
     }
     code = r.code ?? '';
     hosting = true;
-    game.startPrefetch();
     connect(r.room, name);
   },
   async join(name, c) {
@@ -235,6 +285,7 @@ const lobby = new Lobby(overlay, {
       lobby.setNetStatus('badCode');
       return;
     }
+    if (!(await prepareToPlay())) return;
     lobby.setNetStatus('joining');
     const r = await joinRoom(c);
     if (!r.ok) {
@@ -243,7 +294,6 @@ const lobby = new Lobby(overlay, {
     }
     code = c;
     hosting = false;
-    game.startPrefetch();
     connect(r.room, name);
   },
   start(delay) {
@@ -272,6 +322,28 @@ const lobby = new Lobby(overlay, {
     setWearHats(on);
   },
 });
+
+/** 等待资源任务完成；不渲染任何加载文字或遮罩。 */
+async function withLoading(
+  task: (progress: (done: number, total: number) => void) => Promise<void>,
+): Promise<void> {
+  await task(() => {});
+}
+
+/** 在线游戏进入房间前等待共用素材；不显示加载界面。 */
+async function prepareToPlay(): Promise<boolean> {
+  lobby.setLoading(true);
+  try {
+    await withLoading((progress) => game.preloadForPlay(progress));
+    return true;
+  } catch (e) {
+    lobby.setStatus(currentFormat('couldNotLoad', { error: String(e) }));
+    return false;
+  } finally {
+    lobby.setLoading(false);
+  }
+}
+
 touch.onChange = (on) => lobby.setTouch(on);
 
 let display = loadDisplay();
@@ -434,12 +506,14 @@ async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
   stopPlaying = runReplayViewer({ game, meta, body, warning, page, stage: stageWrap, video, onExit: () => backToStart('replays') });
 }
 
-// 每张图像和每个声音都在大厅后台加载并解码，完成后游玩按钮才启用。
-lobby.setLoading(true, currentText('loading'));
+// 遮罩和着色器先加载；之后在后台预取共用素材和默认角色，使菜单立即出现。
+lobby.setLoading(true);
 void game
   .load(() => {})
   .then(() => {
-    lobby.setProgress(1, 1);
-    lobby.setLoading(false, '');
+    lobby.setLoading(false);
+    // 先请求当前菜单实际绘制的图像，再让共用素材在后台排队。
+    game.present();
+    game.startPrefetch();
   })
   .catch((e) => lobby.setStatus(currentFormat('couldNotLoad', { error: String(e) })));

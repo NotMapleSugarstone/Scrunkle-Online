@@ -7,7 +7,7 @@ import type { Runtime } from '../engine/runtime.ts';
 const FADE_S = 0.025;
 /** 至少这么长的声音会跟随模拟时钟。 */
 const FOLLOW_MIN_S = 4;
-const SHORT_SOUND_S = 20;
+export const SHORT_SOUND_S = 20;
 /** 小于此值的漂移属于计时噪声，不处理。 */
 const DEADBAND_S = 0.03;
 /** 超过此值的漂移通过跳转修正，而不是稍微加快或放慢播放。 */
@@ -55,6 +55,7 @@ export class AudioOut {
 
   private files: string[][] = [];
   private base = '';
+  private assetSuffix = '';
   /** 每个声音：0 未请求，1 已排队或加载中，2 已加载。 */
   private loadState: Uint8Array[] = [];
   private urgent: [number, number][] = [];
@@ -74,8 +75,9 @@ export class AudioOut {
    * 游戏在声音到达前播放它时，会优先加载该声音。长声音随后会从游戏
    * 时钟指示的位置开始，短声音仅在仍来得及播放时才播放。
    */
-  startLoading(rt: Runtime, base: string, onProgress?: (done: number, total: number) => void): void {
+  startLoading(rt: Runtime, base: string, onProgress?: (done: number, total: number) => void, assetSuffix = ''): void {
     this.base = base;
+    this.assetSuffix = assetSuffix;
     this.onProgress = onProgress;
     this.total = rt.sprites.reduce((n, s) => n + s.sounds.length, 0);
     this.files = rt.sprites.map((s) => s.sounds.map((d) => d.file));
@@ -100,6 +102,21 @@ export class AudioOut {
   }
 
   private durations: number[][] = [];
+
+  /** 短音效的加载进度，用于进入游戏前的加载界面。 */
+  shortProgress(): [number, number] {
+    let done = 0;
+    let total = 0;
+    for (let si = 0; si < this.durations.length; si++) {
+      const durations = this.durations[si];
+      for (let i = 0; i < durations.length; i++) {
+        if (durations[i] >= SHORT_SOUND_S) continue;
+        total++;
+        if (this.loadState[si]?.[i] === 2) done++;
+      }
+    }
+    return [done, total];
+  }
 
   /** 当所有短于 `seconds` 的声音加载完成或失败后完成。 */
   shortLoaded(seconds: number): Promise<void> {
@@ -133,7 +150,7 @@ export class AudioOut {
       this.loading++;
       let decoded = this.decoded.get(file);
       if (!decoded) {
-        decoded = fetch(/^(blob|data|https?):/.test(file) ? file : `${this.base}${file}`)
+        decoded = fetch(/^(blob|data|https?):/.test(file) ? file : `${this.base}${file}${this.assetSuffix}`)
           .then((res) => res.arrayBuffer())
           .then((data) => this.ctx.decodeAudioData(data));
         this.decoded.set(file, decoded);

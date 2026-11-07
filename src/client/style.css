@@ -71,13 +71,6 @@
   color: var(--ui-muted);
 }
 
-.lobby-progress {
-  min-height: 1.2em;
-  font-size: 0.8em;
-  text-align: center;
-  color: var(--ui-muted);
-}
-
 .lobby-name {
   padding: 0.3em 0;
   font-size: 2.2em;
@@ -999,6 +992,14 @@ body {
   color: var(--ui-muted);
 }
 
+.hud-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .hud-warn {
   color: var(--ui-relay);
 }
@@ -1016,6 +1017,10 @@ body {
 
 .hud .hud-leave {
   margin-left: auto;
+}
+
+.hud-end .hud-leave {
+  margin-left: 0;
 }
 
 /* ------------------------------------------------------------------ Mod 制作器测试场景 */

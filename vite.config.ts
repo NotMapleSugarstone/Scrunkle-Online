@@ -18,6 +18,19 @@ function buildFingerprint(): string {
 }
 
 /** 在页面中为预览图地址加上其哈希，因为聊天应用会按地址缓存链接预览图。 */
+/** 缓存内容寻址的资源；开发时刷新页面不再重新下载两千多张图。 */
+function cacheAssets(): Plugin {
+  return {
+    name: 'cache-assets',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url?.startsWith('/assets/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        next();
+      });
+    },
+  };
+}
+
 function versionPreview(): Plugin {
   return {
     name: 'version-preview',
@@ -30,7 +43,7 @@ function versionPreview(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [versionPreview()],
+  plugins: [cacheAssets(), versionPreview()],
   // 相对资源路径让同一构建可从任意文件夹运行，包括静态主机上的仓库子目录。
   base: './',
   define: {

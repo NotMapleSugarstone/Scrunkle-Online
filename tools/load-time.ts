@@ -35,14 +35,13 @@ for (let i = 0; i < runs; i++) {
   await page.goto(`${server.url}/index.html`);
   await page.waitForFunction(() => [...document.querySelectorAll('.lobby-menu button')].some((b) => b.textContent === 'Play offline' && !(b as HTMLButtonElement).disabled), null, { timeout: 600_000, polling: 200 });
   const ms = Date.now() - t0;
-  const progress = await page.evaluate(() => document.querySelector('.lobby-progress')?.textContent ?? '');
   // 最后一张图像到达的时间，用于区分网络时间与解码和上传时间。
   const images = await page.evaluate(() => {
     const list = performance.getEntriesByType('resource').filter((e) => e.name.includes('/assets/costumes/'));
     return { count: list.length, lastEnd: Math.max(...list.map((e) => (e as PerformanceResourceTiming).responseEnd)) };
   });
   const prepMs = await page.evaluate(() => (window as unknown as { __prepMs: number }).__prepMs);
-  console.log(`run ${i + 1}: Play enabled after ${(ms / 1000).toFixed(1)} s, ${(prepMs / 1000).toFixed(1)} s of it making textures, the last of ${images.count} images arrived at ${(images.lastEnd / 1000).toFixed(1)} s${progress ? ` (${progress} still loading)` : ''}${errors.length ? `, errors: ${errors.join('; ')}` : ''}`);
+  console.log(`run ${i + 1}: Play enabled after ${(ms / 1000).toFixed(1)} s, ${(prepMs / 1000).toFixed(1)} s of it making textures, the last of ${images.count} images arrived at ${(images.lastEnd / 1000).toFixed(1)} s${errors.length ? `, errors: ${errors.join('; ')}` : ''}`);
   await context.close();
 }
 await browser.close();

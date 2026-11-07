@@ -12,7 +12,7 @@ import { clock, REPLAY_NAME_MAX, replayName, replayTitle, type ReplayMeta } from
 import { deleteReplay, importReplay, listReplays, renameReplay, REPLAY_FILE_TYPE, replayFile } from './replay-store.ts';
 import { VIDEO_QUALITIES, type VideoQuality } from './replay-viewer.ts';
 import { downloadFile, fileName } from './download.ts';
-import { actionLabel, currentFormat, currentText, displayLabel, keyLabel, loadNetLang, modeLabel, netFrameDelay, netReason, netText, saveNetLang, type NetLang, type NetTextKey } from './net-text.ts';
+import { actionLabel, currentText, displayLabel, keyLabel, loadNetLang, modeLabel, netFrameDelay, netReason, netText, saveNetLang, type NetLang, type NetTextKey } from './net-text.ts';
 import type { DisplayMode } from '../render/webgl.ts';
 
 const NAME_KEY = `${STORAGE_PREFIX}.name`;
@@ -127,7 +127,6 @@ export interface LobbyHandlers {
 export class Lobby {
   root: HTMLDivElement;
   private status: HTMLDivElement;
-  private progress: HTMLDivElement;
   private menu: HTMLDivElement;
   private room: HTMLDivElement;
   private onlineHeading: HTMLDivElement;
@@ -375,8 +374,7 @@ export class Lobby {
     });
 
     this.status = el('div', 'lobby-status');
-    this.progress = el('div', 'lobby-progress');
-    panel.append(this.menu, this.room, this.controlsView, this.replaysView, this.noticeView, this.status, this.progress);
+    panel.append(this.menu, this.room, this.controlsView, this.replaysView, this.noticeView, this.status);
     this.replaysBtn = el('button', 'lobby-option', currentText('replays'));
     this.replaysBtn.addEventListener('click', () => this.openReplays());
     this.controlsBtn = el('button', 'lobby-option', currentText('controls'));
@@ -521,12 +519,6 @@ export class Lobby {
 
   private writeStatus(text: string): void {
     this.status.textContent = text;
-  }
-
-  /** 菜单下方的素材预热计数，全部加载后消失。 */
-  setProgress(done: number, total: number): void {
-    const text = done >= total ? '' : currentFormat('loadingAssets', { percent: Math.floor((done / total) * 100) });
-    if (this.progress.textContent !== text) this.progress.textContent = text;
   }
 
   showMenu(): void {
