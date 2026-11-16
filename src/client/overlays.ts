@@ -90,11 +90,20 @@ export class QuestionBox {
 }
 
 export class ListMonitors {
-  private els = new Map<string, { root: HTMLDivElement; body: HTMLDivElement; footer: HTMLDivElement; last: string }>();
+  private els = new Map<string, {
+    root: HTMLDivElement;
+    body: HTMLDivElement;
+    footer: HTMLDivElement;
+    rows: HTMLDivElement[];
+    prev: Value[] | null;
+    shown: boolean;
+  }>();
+  private tick = 0;
 
   constructor(private parent: HTMLElement, private defs: Monitors) {}
 
   update(rt: Runtime): void {
+    const tick = ++this.tick;
     for (const d of this.defs.lists) {
       const visible = rt.monitorVisible[d.prop] ?? d.visible;
       let m = this.els.get(d.prop);
@@ -118,29 +127,45 @@ export class ListMonitors {
         footer.className = 'list-footer';
         root.append(header, body, footer);
         this.parent.append(root);
-        m = { root, body, footer, last: '' };
+        m = { root, body, footer, rows: [], prev: null, shown: false };
         this.els.set(d.prop, m);
       }
+      const show = !m.shown;
+      m.shown = true;
       m.root.hidden = false;
+      if (!show && tick % 3 !== 0) continue;
       const items: Value[] = rt.stage.l[d.prop];
-      const key = JSON.stringify(items);
-      if (key !== m.last) {
-        m.last = key;
-        m.body.replaceChildren(
-          ...items.map((v, i) => {
-            const row = document.createElement('div');
-            row.className = 'list-row';
-            const idx = document.createElement('span');
-            idx.className = 'list-index';
-            idx.textContent = String(i + 1);
-            const val = document.createElement('span');
-            val.className = 'list-value';
-            val.textContent = String(v);
-            row.append(idx, val);
-            return row;
-          }),
-        );
+      let same = m.prev !== null && m.prev.length === items.length;
+      if (same) {
+        for (let i = 0; i < items.length; i++) {
+          if (m.prev![i] !== items[i]) {
+            same = false;
+            break;
+          }
+        }
+      }
+      if (same) continue;
+      m.prev = items.slice();
+      if (m.rows.length !== items.length) {
+        m.rows = items.map((v, i) => {
+          const row = document.createElement('div');
+          row.className = 'list-row';
+          const idx = document.createElement('span');
+          idx.className = 'list-index';
+          idx.textContent = String(i + 1);
+          const val = document.createElement('span');
+          val.className = 'list-value';
+          val.textContent = String(v);
+          row.append(idx, val);
+          return row;
+        });
+        m.body.replaceChildren(...m.rows);
         m.footer.textContent = `length ${items.length}`;
+      } else {
+        for (let i = 0; i < items.length; i++) {
+          const val = m.rows[i].lastElementChild;
+          if (val) val.textContent = String(items[i]);
+        }
       }
     }
   }
@@ -229,12 +254,18 @@ export class PauseMenu {
  */
 export class Bubbles {
   private els = new Map<number, { el: HTMLDivElement; right: boolean }>();
+  private sizes = new Map<number, { w: number; h: number }>();
+  private stageW = 0;
 
   constructor(private parent: HTMLElement) {}
 
   update(rt: Runtime): void {
     const live = new Set<number>();
     const stageW = this.parent.clientWidth || STAGE_W;
+    if (stageW !== this.stageW) {
+      this.stageW = stageW;
+      this.sizes.clear();
+    }
     for (const t of rt.targets) {
       const text = rt.bubbles[t.id];
       if (text === undefined || !t.visible) continue;
@@ -247,11 +278,19 @@ export class Bubbles {
         m = { el, right: true };
         this.els.set(t.id, m);
       }
-      if (m.el.textContent !== text) m.el.textContent = text;
+      if (m.el.textContent !== text) {
+        m.el.textContent = text;
+        this.sizes.delete(t.id);
+      }
       // 气泡大小以舞台单位计。造型框只是几何数据；外壳边界会改变模拟状态。
       const unit = STAGE_W / stageW;
-      const w = m.el.offsetWidth * unit;
-      const h = m.el.offsetHeight * unit;
+      let size = this.sizes.get(t.id);
+      if (!size) {
+        size = { w: m.el.offsetWidth * unit, h: m.el.offsetHeight * unit };
+        this.sizes.set(t.id, size);
+      }
+      const w = size.w;
+      const h = size.h;
       const b = rt.render.aabb(t);
       if (m.right && w + b.right > STAGE_X && b.left - w > -STAGE_X) m.right = false;
       else if (!m.right && b.left - w < -STAGE_X && w + b.right < STAGE_X) m.right = true;
@@ -264,6 +303,7 @@ export class Bubbles {
       if (!live.has(id)) {
         m.el.remove();
         this.els.delete(id);
+        this.sizes.delete(id);
       }
     }
   }

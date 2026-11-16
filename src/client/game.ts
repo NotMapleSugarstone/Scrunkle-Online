@@ -64,6 +64,8 @@ export class Game {
   private lastFighters = '';
   private fighterSkins = new Map<number, number[]>();
   private base: number[] | null = null;
+  private nextFrameAt = 0;
+  private activePlay = false;
 
   constructor(
     public canvas: HTMLCanvasElement,
@@ -80,6 +82,7 @@ export class Game {
     this.vars = new VarMonitors(overlay, monitors);
     this.bubbles = new Bubbles(overlay);
     this.pause = pauseRule ? new PauseMenu(overlay, pauseRule) : null;
+    this.renderer.setUploadGate(() => this.canRunBackgroundUpload());
   }
 
   /** 安装遮罩并点击绿旗后的运行时。遮罩必须已加载。 */
@@ -115,11 +118,43 @@ export class Game {
     this.prefetchModeAssets();
   }
 
+  setOnlinePlay(on: boolean): void {
+    this.setActivePlay(on);
+    this.renderer.setBackgroundPaused(on);
+  }
+
+  setActivePlay(on: boolean): void {
+    if (this.activePlay === on) return;
+    this.activePlay = on;
+  }
+
+  setNextFrameAt(at: number): void {
+    this.nextFrameAt = at;
+  }
+
+  private canRunBackgroundUpload(): boolean {
+    if (!this.activePlay) return true;
+    return this.nextFrameAt <= 0 || performance.now() >= this.nextFrameAt - FRAME_MS;
+  }
+
+  evictInactive(includeAudio = true): void {
+    const ids = this.fighterIds();
+    const keep = new Set<number>([
+      ...this.baseSkins(),
+      ...this.visibleSkins(),
+      ...this.fighterSkinsFor(ids),
+      ...this.cutsceneSkinsFor(ids),
+    ]);
+    this.renderer.evictExcept(keep);
+    if (includeAudio) this.audio.evictLong(this.rt, 3);
+  }
+
   /**
    * 进入游戏前等待共用图像和短音效加载完毕；长音乐仍在播放时按需加载。
    * `onProgress` 同时统计图像和短音效，供等待进度回调使用。
    */
   async preloadForPlay(onProgress: (done: number, total: number) => void): Promise<void> {
+    this.evictInactive(true);
     this.startPrefetch();
     const ids = this.fighterIds();
     const skins = [...new Set([
@@ -151,6 +186,7 @@ export class Game {
 
   /** 实际比赛开始前只等待当前画面、斗士和其过场帧；共用素材继续在后台加载。 */
   async preloadForFight(onProgress: (done: number, total: number) => void): Promise<void> {
+    this.evictInactive(false);
     this.startPrefetch();
     const ids = this.fighterIds();
     const skins = [...new Set([
@@ -159,6 +195,29 @@ export class Game {
       ...this.cutsceneSkinsFor(ids),
     ])];
     await this.renderer.loadNow(skins, onProgress);
+  }
+
+  async preloadForSwitch(onProgress: (done: number, total: number) => void): Promise<void> {
+    const ids = this.fighterIds();
+    const gate = [...new Set([...this.visibleSkins(), ...this.firstSkinsFor(ids, 4)])];
+    const shown = new Set(gate);
+    await this.renderer.loadNow(gate, onProgress);
+    const rest = this.fighterSkinsFor(ids).filter((i) => !shown.has(i));
+    if (rest.length > 0) this.renderer.prioritizeBackground(rest);
+    this.lastFighters = ids.join(',');
+  }
+
+  canInstantSwitch(): boolean {
+    const ids = this.fighterIds();
+    return this.renderer.areReady([...this.visibleSkins(), ...this.firstSkinsFor(ids, 4)]);
+  }
+
+  queueSwitchBackground(): void {
+    const ids = this.fighterIds();
+    const visible = new Set(this.visibleSkins());
+    const rest = this.fighterSkinsFor(ids).filter((i) => !visible.has(i));
+    if (rest.length > 0) this.renderer.prioritizeBackground(rest);
+    this.lastFighters = ids.join(',');
   }
 
   /**
@@ -298,8 +357,24 @@ export class Game {
     const key = ids.join(',');
     if (key === this.lastFighters) return;
     this.lastFighters = key;
-    const add = [...new Set([...this.fighterSkinsFor(ids), ...this.cutsceneSkinsFor(ids)])];
-    if (add.length > 0) void this.renderer.loadNow(add);
+    const gate = [...new Set([...this.visibleSkins(), ...this.firstSkinsFor(ids, 4)])];
+    const shown = new Set(gate);
+    if (gate.length > 0) void this.renderer.loadNow(gate);
+    const rest = this.fighterSkinsFor(ids).filter((i) => !shown.has(i));
+    if (rest.length > 0) this.renderer.prioritizeBackground(rest);
+    const cutscenes = this.cutsceneSkinsFor(ids).filter((i) => !shown.has(i));
+    if (cutscenes.length > 0) this.renderer.loadLater(cutscenes);
+  }
+
+  private firstSkinsFor(ids: number[], count: number): number[] {
+    if (this.fighterSkins.size === 0) this.collectFighterSkins();
+    const out: number[] = [];
+    for (const id of ids) {
+      const list = this.fighterSkins.get(id);
+      if (!list) continue;
+      for (let i = 0; i < Math.min(count, list.length); i++) out.push(list[i]);
+    }
+    return [...new Set(out)];
   }
 
   private fighterIds(): number[] {
@@ -342,16 +417,14 @@ export class Game {
     this.bubbles.update(this.rt);
     this.pause?.update(this.rt);
     if (this.prefetching) this.prefetchSelection();
+    this.renderer.kickUploads();
   }
 }
 
-/** 在 Worker 中运行，每 4 毫秒发送一条消息，使后台标签页也能持续收到。 */
-const HEARTBEAT = 'const beat = () => { postMessage(0); setTimeout(beat, 4); }; beat();';
-
-/** 帧可以提前开始的量，避免屏幕刷新抖动把帧推到下一次刷新。 */
 const SLACK_MS = 4;
-/** 帧迟到多久后由心跳运行；该值大于 50 Hz 以上刷新间隔。 */
 const LATE_MS = 25;
+const VISIBLE_BEAT_MS = 33;
+const HIDDEN_BEAT_MS = 16;
 
 /**
  * 每帧调用一次 `tick`，间隔与原版一样为 FRAME_MS；只要运行过帧，随后调用一次 `after`。
@@ -359,10 +432,11 @@ const LATE_MS = 25;
  * 某些屏幕也会变慢，因此 Worker 心跳会运行迟到 LATE_MS 的帧，或在刷新停止后运行到期帧，
  * 让在线比赛继续。
  */
-export function startFixedLoop(tick: () => void, after: () => void): () => void {
+export function startFixedLoop(tick: () => void, after: () => void, onNext?: (next: number) => void): () => void {
   const clock = () => performance.timeOrigin + performance.now();
   let next = clock() + FRAME_MS;
   let stopped = false;
+  const publish = () => onNext?.(next);
   const run = (now: number) => {
     // 长时间卡顿后，循环会跳过遗漏的帧，而不是一次性补播。
     if (now - next > 250) next = now;
@@ -372,7 +446,10 @@ export function startFixedLoop(tick: () => void, after: () => void): () => void 
       next += FRAME_MS;
       ran = true;
     }
-    if (ran) after();
+    if (ran) {
+      after();
+      publish();
+    }
   };
   let raf = 0;
   let lastRefresh = 0;
@@ -382,34 +459,65 @@ export function startFixedLoop(tick: () => void, after: () => void): () => void 
     run(performance.timeOrigin + ts);
     raf = requestAnimationFrame(refresh);
   };
+  publish();
   raf = requestAnimationFrame(refresh);
+  let beatTimer = 0;
+  let fallback = 0;
+  let worker: Worker | null = null;
+  let heard = false;
   const beat = () => {
     const now = clock();
     if (!stopped && now > next + (now - lastRefresh < 100 ? LATE_MS : 0)) run(now);
   };
-  let heard = false;
-  let timer = 0;
-  const worker = new Worker(URL.createObjectURL(new Blob([HEARTBEAT], { type: 'text/javascript' })));
-  worker.onmessage = () => {
-    heard = true;
-    beat();
+  const stopBeat = () => {
+    if (worker) {
+      worker.terminate();
+      worker = null;
+    }
+    clearTimeout(beatTimer);
+    clearTimeout(fallback);
   };
-  // 某些嵌入式浏览器无法启动由 blob 创建的 Worker。此时使用页面自身的定时器
-  // 提供心跳，尽管标签页在后台时它们会变慢。
-  const fallback = window.setTimeout(() => {
-    if (heard || stopped) return;
-    worker.terminate();
+  const startBeat = () => {
+    stopBeat();
+    heard = false;
+    const period = document.visibilityState === 'hidden' ? HIDDEN_BEAT_MS : VISIBLE_BEAT_MS;
+    let failed = false;
+    try {
+      const source = `const beat = () => { postMessage(0); setTimeout(beat, ${period}); }; beat();`;
+      worker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
+      worker.onmessage = () => {
+        heard = true;
+        beat();
+      };
+    } catch {
+      failed = true;
+    }
     const loop = () => {
       beat();
-      if (!stopped) timer = window.setTimeout(loop, 4);
+      if (!stopped) beatTimer = window.setTimeout(loop, period);
     };
-    loop();
-  }, 500);
+    if (failed) loop();
+    else fallback = window.setTimeout(() => {
+      if (heard || stopped) return;
+      if (worker) {
+        worker.terminate();
+        worker = null;
+      }
+      loop();
+    }, 500);
+  };
+  const onVisibility = () => {
+    lastRefresh = clock();
+    startBeat();
+    beat();
+    publish();
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+  startBeat();
   return () => {
     stopped = true;
     cancelAnimationFrame(raf);
-    worker.terminate();
-    clearTimeout(fallback);
-    clearTimeout(timer);
+    stopBeat();
+    document.removeEventListener('visibilitychange', onVisibility);
   };
 }

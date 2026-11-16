@@ -8,6 +8,8 @@ const FADE_S = 0.025;
 /** 至少这么长的声音会跟随模拟时钟。 */
 const FOLLOW_MIN_S = 4;
 export const SHORT_SOUND_S = 20;
+const RETRY_LIMIT = 2;
+const LONG_TRACK_LIMIT = 3;
 /** 小于此值的漂移属于计时噪声，不处理。 */
 const DEADBAND_S = 0.03;
 /** 超过此值的漂移通过跳转修正，而不是稍微加快或放慢播放。 */
@@ -69,6 +71,9 @@ export class AudioOut {
   private onProgress?: (done: number, total: number) => void;
   private loaded = 0;
   private total = 0;
+  private retries: Uint8Array[] = [];
+  private touched = new Map<string, number>();
+  private useClock = 0;
 
   /**
    * 在后台开始加载声音；项目中的声音超过一百兆字节。
@@ -83,9 +88,15 @@ export class AudioOut {
     this.files = rt.sprites.map((s) => s.sounds.map((d) => d.file));
     this.buffers = rt.sprites.map((s) => s.sounds.map(() => null));
     this.loadState = rt.sprites.map((s) => new Uint8Array(s.sounds.length));
+    this.retries = rt.sprites.map((s) => new Uint8Array(s.sounds.length));
     this.durations = rt.sprites.map((s) => s.sounds.map((d) => d.sampleCount / d.rate));
     this.backgroundStarted = false;
     this.background = [];
+    this.urgent = [];
+    this.loading = 0;
+    this.loaded = 0;
+    this.touched.clear();
+    this.useClock = 0;
     this.pump();
   }
 
@@ -112,7 +123,7 @@ export class AudioOut {
       for (let i = 0; i < durations.length; i++) {
         if (durations[i] >= SHORT_SOUND_S) continue;
         total++;
-        if (this.loadState[si]?.[i] === 2) done++;
+        if (this.loadState[si]?.[i] === 2 || this.loadState[si]?.[i] === 3) done++;
       }
     }
     return [done, total];
@@ -120,7 +131,7 @@ export class AudioOut {
 
   /** 当所有短于 `seconds` 的声音加载完成或失败后完成。 */
   shortLoaded(seconds: number): Promise<void> {
-    const ready = () => this.loadState.every((list, si) => list.every((st, i) => st === 2 || this.durations[si][i] >= seconds));
+    const ready = () => this.loadState.every((list, si) => list.every((st, i) => st === 2 || st === 3 || this.durations[si][i] >= seconds));
     return ready() ? Promise.resolve() : new Promise((r) => this.waiters.push(() => (ready() ? (r(), true) : false)));
   }
 
@@ -128,7 +139,13 @@ export class AudioOut {
   private waiters: (() => boolean)[] = [];
 
   private want(si: number, i: number): void {
-    if (!this.loadState[si] || this.loadState[si][i] !== 0) return;
+    if (!this.loadState[si] || this.loadState[si][i] === 2) return;
+    if (this.loadState[si][i] === 3) {
+      if (this.retries[si][i] >= RETRY_LIMIT) return;
+      this.retries[si][i]++;
+      this.loadState[si][i] = 0;
+    }
+    if (this.loadState[si][i] !== 0) return;
     this.loadState[si][i] = 1;
     this.urgent.push([si, i]);
     this.pump();
@@ -158,7 +175,14 @@ export class AudioOut {
       void decoded
         .then((buf) => (this.buffers[si][i] = buf), () => (this.buffers[si][i] = null))
         .finally(() => {
-          this.loadState[si][i] = 2;
+          const buffer = this.buffers[si][i];
+          if (buffer) {
+            this.loadState[si][i] = 2;
+            this.touched.set(file, ++this.useClock);
+          } else {
+            this.loadState[si][i] = 3;
+            if (this.decoded.get(file) === decoded) this.decoded.delete(file);
+          }
           this.loading--;
           this.onProgress?.(++this.loaded, this.total);
           this.arrived(si, i);
@@ -275,6 +299,8 @@ export class AudioOut {
       this.fadeOut(key, now);
       this.pending.delete(key);
       const buffer = this.buffers[e.sprite]?.[e.sound];
+      const file = this.files[e.sprite]?.[e.sound];
+      if (buffer && file) this.touched.set(file, ++this.useClock);
       if (this.muted) return;
       if (!buffer) {
         if (this.loadState[e.sprite]?.[e.sound] !== 2) {
@@ -371,6 +397,48 @@ export class AudioOut {
   /** 淡出一个声音，用于修正移除了已经开始的声音时。 */
   stopSound(sprite: number, sound: number): void {
     this.fadeOut(`${sprite}:${sound}`, this.ctx.currentTime);
+  }
+
+  evictLong(rt: Runtime | null, limit = LONG_TRACK_LIMIT): void {
+    const active = new Set<string>();
+    for (const key of this.voices.keys()) active.add(key);
+    for (const key of this.pending.keys()) active.add(key);
+    if (rt) {
+      rt.players.forEach((list, si) => list.forEach((p, i) => {
+        if (p.isPlaying) active.add(`${si}:${i}`);
+      }));
+    }
+    const groups = new Map<string, [number, number][]>();
+    const pinned = new Set<string>();
+    for (let si = 0; si < this.durations.length; si++) {
+      const durations = this.durations[si];
+      for (let i = 0; i < durations.length; i++) {
+        if (durations[i] < SHORT_SOUND_S) continue;
+        const file = this.files[si]?.[i];
+        if (!file) continue;
+        const state = this.loadState[si]?.[i];
+        if (state === 1 || active.has(`${si}:${i}`)) pinned.add(file);
+        if (state !== 2) continue;
+        const list = groups.get(file) ?? [];
+        list.push([si, i]);
+        groups.set(file, list);
+      }
+    }
+    const keep = new Set<string>(pinned);
+    const ordered = [...groups.keys()].sort((a, b) => (this.touched.get(b) ?? 0) - (this.touched.get(a) ?? 0));
+    for (const file of ordered) {
+      if (keep.has(file)) continue;
+      if (keep.size < limit) {
+        keep.add(file);
+        continue;
+      }
+      for (const [si, i] of groups.get(file)!) {
+        this.buffers[si][i] = null;
+        this.loadState[si][i] = 0;
+      }
+      this.decoded.delete(file);
+      this.touched.delete(file);
+    }
   }
 
   /** 停止所有声音，用于回滚替换时间线时。 */

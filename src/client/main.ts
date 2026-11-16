@@ -86,6 +86,11 @@ input.escapeAs = pauseRule?.pauseKey ?? null;
 const resumeAudio = () => game.audio.resume();
 window.addEventListener('pointerdown', resumeAudio);
 window.addEventListener('keydown', resumeAudio);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  game.audio.resume();
+  game.audio.sync(game.rt.currentMSecs);
+});
 (window as unknown as { __game: Game }).__game = game;
 
 const pads = new Pads();
@@ -105,6 +110,7 @@ function backToStart(view: 'menu' | 'replays' = 'menu'): void {
   stopPlaying?.();
   stopPlaying = null;
   input.enabled = false;
+  game.setOnlinePlay(false);
   game.audio.stopAll();
   game.rt = Game.createRuntime({ seed: randomSeed(), t0: localT0() });
   toast.hide();
@@ -184,6 +190,8 @@ function applyCutsceneDefault(rt: Game['rt']): void {
 
 const lobby = new Lobby(overlay, {
   async local() {
+    game.setOnlinePlay(false);
+    game.evictInactive(true);
     game.startPrefetch();
     // 等待进入游戏后新出现的可见图像；不显示加载画面，完成后再收起大厅。
     await withLoading((progress) => game.preloadCurrentView(progress));
@@ -199,7 +207,7 @@ const lobby = new Lobby(overlay, {
     game.audio.resume();
     const replay = recorder(game.rt.t0, false, []);
     const bar = leaveBar();
-    const stopSaving = keepSaving(() => game.rt);
+    const stopSaving = keepSaving(() => game.rt, () => inMatch(game.rt));
     const saveCodes = codeFiles((name) => toast.show(currentFormat('saved', { name }), 4000));
     let fightLoading = false;
     let fightReady = false;
@@ -215,6 +223,7 @@ const lobby = new Lobby(overlay, {
         replay.frame([p], runtimeState(game.rt));
       },
       () => {
+        game.setActivePlay(inMatch(game.rt) || game.cutsceneActive());
         if (!inMatch(game.rt)) {
           fightReady = false;
           readyFighters = '';
@@ -231,13 +240,22 @@ const lobby = new Lobby(overlay, {
           saveCodes(game.rt);
           return;
         }
-        if (fightLoading) return;
-        fightLoading = true;
         const fighterChanged = !fightReady || fighters !== readyFighters;
         const cutsceneChanged = !!cutscene && cutscene !== readyCutscene;
+        if (!fightLoading && fightReady && fighterChanged && !cutsceneChanged && game.canInstantSwitch()) {
+          game.queueSwitchBackground();
+          readyFighters = fighters;
+          game.present();
+          saveCodes(game.rt);
+          return;
+        }
+        if (fightLoading) return;
+        fightLoading = true;
         const load = async (progress: (done: number, total: number) => void) => {
           if (fighterChanged) {
-            await game.preloadForFight(cutsceneChanged ? () => {} : progress);
+            const next = cutsceneChanged ? () => {} : progress;
+            if (fightReady) await game.preloadForSwitch(next);
+            else await game.preloadForFight(next);
           }
           if (cutsceneChanged) await game.preloadForCutscene(progress);
         };
@@ -254,6 +272,7 @@ const lobby = new Lobby(overlay, {
             }
           });
       },
+      (next) => game.setNextFrameAt(next),
     );
     stopPlaying = () => {
       stopped = true;
@@ -269,10 +288,15 @@ const lobby = new Lobby(overlay, {
     void watchReplay(id, quality);
   },
   async host(name) {
-    if (!(await prepareToPlay())) return;
+    game.setOnlinePlay(true);
+    if (!(await prepareToPlay())) {
+      game.setOnlinePlay(false);
+      return;
+    }
     lobby.setNetStatus('opening');
     const r = await hostRoom();
     if (!r.ok) {
+      game.setOnlinePlay(false);
       lobby.setNetReason(r.reason);
       return;
     }
@@ -285,10 +309,15 @@ const lobby = new Lobby(overlay, {
       lobby.setNetStatus('badCode');
       return;
     }
-    if (!(await prepareToPlay())) return;
+    game.setOnlinePlay(true);
+    if (!(await prepareToPlay())) {
+      game.setOnlinePlay(false);
+      return;
+    }
     lobby.setNetStatus('joining');
     const r = await joinRoom(c);
     if (!r.ok) {
+      game.setOnlinePlay(false);
       lobby.setNetReason(r.reason);
       return;
     }
@@ -306,6 +335,7 @@ const lobby = new Lobby(overlay, {
     room?.close();
     room = null;
     mesh = null;
+    game.setOnlinePlay(false);
     lobby.showMenu();
     lobby.setStatus('');
   },
@@ -391,8 +421,10 @@ function connect(roomId: string, name: string): void {
     if (client.refusal) return;
     if (s !== 'open') report('room-socket', { status: s, why, inGame: online !== null, ...(online?.diagnostics() ?? {}) });
     if (s === 'reconnecting') lobby.setNetStatus('connectionLost');
-    else if (s === 'closed' && !online) lobby.setNetStatus('disconnected');
-    else if (s === 'open') lobby.setStatus('');
+    else if (s === 'closed' && !online) {
+      game.setOnlinePlay(false);
+      lobby.setNetStatus('disconnected');
+    } else if (s === 'open') lobby.setStatus('');
   };
   room.onMessage = (m) => {
     switch (m.type) {
@@ -432,6 +464,7 @@ function connect(roomId: string, name: string): void {
       case 'refused':
         // 房间拒绝自己的房主时房间内无人，因此撤回房间代码。
         if (hosting && code) void cancelRoom(code);
+        game.setOnlinePlay(false);
         lobby.setNetReason(m.reason);
         lobby.showMenu();
         break;
@@ -442,7 +475,9 @@ function connect(roomId: string, name: string): void {
 
 function begin(start: StartInfo): void {
   if (!room || !mesh || online) return;
+  game.setOnlinePlay(true);
   if (!start.seats.includes(room.seat)) {
+    game.setOnlinePlay(false);
     lobby.setNetStatus('startedWithout');
     return;
   }
@@ -487,6 +522,7 @@ async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
   }
   const { meta, body } = saved;
   const warning = meta.build !== BUILD ? currentText('replayDifferentVersion') : '';
+  game.setOnlinePlay(false);
   lobby.hide();
   lobby.setStatus('');
   game.audio.stopAll();

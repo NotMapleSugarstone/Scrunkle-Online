@@ -190,6 +190,7 @@ export class OnlineGame {
         this.game.present();
         this.updateHud();
       },
+      (next) => this.game.setNextFrameAt(next),
     );
   }
 
@@ -252,5 +253,6 @@ export class OnlineGame {
     }
     this.mesh.close();
     this.room.close();
+    this.game.setOnlinePlay(false);
   }
 }

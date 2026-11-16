@@ -80,9 +80,65 @@ const MAX_FRAMES = 30 * 60 * 30;
 /** 短于 10 秒的比赛不提示保存。 */
 const MIN_FRAMES = 300;
 
+function cloudEqual(a: PlayerInput['cloud'], b: PlayerInput['cloud']): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i][0] !== b[i][0] || a[i][1] !== b[i][1]) return false;
+  return true;
+}
+
+function varsEqual(a: PlayerInput['vars'], b: PlayerInput['vars']): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i][0] !== b[i][0] || a[i][1] !== b[i][1]) return false;
+  return true;
+}
+
+function listsEqual(a: PlayerInput['lists'], b: PlayerInput['lists']): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x[0] !== y[0] || x[1] !== y[1] || x[2].length !== y[2].length) return false;
+    for (let j = 0; j < x[2].length; j++) if (x[2][j] !== y[2][j]) return false;
+  }
+  return true;
+}
+
+function inputsEqual(a: PlayerInput[], b: PlayerInput[] | null): boolean {
+  if (b === null || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x === y) continue;
+    const keys = x.keys;
+    if (keys.length !== y.keys.length) return false;
+    for (let j = 0; j < keys.length; j++) if (keys[j] !== y.keys[j]) return false;
+    const mx = x.mouse;
+    const my = y.mouse;
+    if (!!mx !== !!my) return false;
+    if (mx && my && (mx.x !== my.x || mx.y !== my.y || mx.down !== my.down)) return false;
+    if (x.answer !== y.answer || !cloudEqual(x.cloud, y.cloud) || !varsEqual(x.vars, y.vars) || !listsEqual(x.lists, y.lists)) return false;
+  }
+  return true;
+}
+
+function cloneInputs(inputs: PlayerInput[]): PlayerInput[] {
+  return inputs.map((p) => {
+    const q: PlayerInput = { keys: p.keys.slice() };
+    if (p.mouse) q.mouse = { ...p.mouse };
+    if (p.answer !== undefined) q.answer = p.answer;
+    if (p.cloud) q.cloud = p.cloud.map(([a, b]) => [a, b]);
+    if (p.vars) q.vars = p.vars.map(([a, b]) => [a, b]);
+    if (p.lists) q.lists = p.lists.map(([a, b, c]) => [a, b, c.slice()]);
+    return q;
+  });
+}
+
 interface Recording {
   body: ReplayBody;
-  last: string;
+  lastInputs: PlayerInput[] | null;
   frames: number;
   mode: string;
   fighters: string[];
@@ -116,7 +172,7 @@ export class ReplayRecorder {
     } else if (info && !this.wasMatch) {
       this.rec = {
         body: { format: 1, t0: this.t0, start: detached(s.snapshot()), runs: [], checks: [] },
-        last: '',
+        lastInputs: null,
         frames: 0,
         ...info,
       };
@@ -126,12 +182,12 @@ export class ReplayRecorder {
   }
 
   private add(rec: Recording, inputs: PlayerInput[], s: FrameState): void {
-    const text = JSON.stringify(inputs);
     const runs = rec.body.runs;
-    if (text === rec.last) runs[runs.length - 1][0]++;
+    if (inputsEqual(inputs, rec.lastInputs)) runs[runs.length - 1][0]++;
     else {
-      runs.push([1, JSON.parse(text) as PlayerInput[]]);
-      rec.last = text;
+      const copy = cloneInputs(inputs);
+      runs.push([1, copy]);
+      rec.lastInputs = copy;
     }
     rec.frames++;
     if (rec.frames % CHECK_EVERY === 0) rec.body.checks.push([rec.frames, snapshotHash(s.snapshot())]);

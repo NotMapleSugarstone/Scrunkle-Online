@@ -38,7 +38,13 @@ const SMOOTH_RATE = 0.45;
 const SMOOTH_SNAP = 90;
 const MIP_OFFSET = 8;
 /** 同时进行的图像请求数；提高它可缩短冷缓存启动时间。 */
-const LOAD_CONCURRENCY = 32;
+const URGENT_NET_CONCURRENCY = 8;
+const BACKGROUND_CONCURRENCY = 2;
+const MAX_NET_CONCURRENCY = 10;
+const UPLOAD_BUDGET_MS = 3;
+const GATE_UPLOAD_BUDGET_MS = 6;
+const HIDDEN_UPLOAD_BUDGET_MS = 50;
+const RETRY_LIMIT = 2;
 
 interface Program {
   prog: WebGLProgram;
@@ -132,6 +138,7 @@ export class WebGLRenderer {
     this.geom = new RenderModel(skins);
     this.images = skins.map(() => null);
     this.textures = skins.map(() => new Map());
+    document.addEventListener('visibilitychange', this.onVisibility);
 
     this.quadPos = this.buffer([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5]);
     this.quadTex = this.buffer([1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1]);
@@ -181,16 +188,32 @@ export class WebGLRenderer {
 
   private base = '';
   private assetSuffix = '';
-  /** 按皮肤索引：0 未请求，1 已排队或加载中，2 已加载。 */
   private loadState: Uint8Array = new Uint8Array(0);
+  private retries: Uint8Array = new Uint8Array(0);
+  private needsPrepare: Uint8Array = new Uint8Array(0);
+  private settledFlag: Uint8Array = new Uint8Array(0);
+  private itemGen: Uint32Array = new Uint32Array(0);
+  private uploadGen: Uint32Array = new Uint32Array(0);
+  private loaderGen = 0;
   private urgent: number[] = [];
   private immediate: number[] = [];
   private background: number[] = [];
   private nextBackground = 0;
   private loading = 0;
-  private loaded = 0;
-  private inflight = new Set<number>();
+  private backgroundLoading = 0;
+  private urgentLoading = 0;
+  private fetched = 0;
+  private settled = 0;
+  private fetchSeq = 0;
+  private inflight = new Map<number, number>();
   private onProgress?: (done: number, total: number) => void;
+  private backgroundPaused = false;
+  private uploads: { idx: number; gen: number }[] = [];
+  private prepareLater = new Set<number>();
+  private uploadRaf: number | null = null;
+  private uploadTimeout: ReturnType<typeof setTimeout> | null = null;
+  private uploadGate: () => boolean = () => true;
+  private activeGates = 0;
 
   /**
    * 从 `base`（资源文件夹的 URL 前缀）开始加载造型图像，并为 `effects` 编译着色器。
@@ -201,7 +224,30 @@ export class WebGLRenderer {
     this.base = base;
     this.assetSuffix = assetSuffix;
     this.onProgress = onProgress;
+    this.loaderGen++;
     this.loadState = new Uint8Array(this.skins.length);
+    this.retries = new Uint8Array(this.skins.length);
+    this.needsPrepare = new Uint8Array(this.skins.length);
+    this.settledFlag = new Uint8Array(this.skins.length);
+    this.itemGen = new Uint32Array(this.skins.length);
+    this.uploadGen = new Uint32Array(this.skins.length);
+    this.loading = 0;
+    this.backgroundLoading = 0;
+    this.urgentLoading = 0;
+    this.fetched = 0;
+    this.settled = 0;
+    this.activeGates = 0;
+    this.waiters.length = 0;
+    this.inflight.clear();
+    this.urgent.length = 0;
+    this.immediate.length = 0;
+    this.background.length = 0;
+    this.uploads.length = 0;
+    this.prepareLater.clear();
+    if (this.uploadRaf !== null) cancelAnimationFrame(this.uploadRaf);
+    if (this.uploadTimeout !== null) clearTimeout(this.uploadTimeout);
+    this.uploadRaf = null;
+    this.uploadTimeout = null;
     for (const bits of [0, ...effects]) this.program(false, bits);
     this.program(true, 0);
     this.nextBackground = this.skins.length;
@@ -218,19 +264,68 @@ export class WebGLRenderer {
     this.pump();
   }
 
+  areReady(skins: number[]): boolean {
+    for (const i of new Set(skins)) {
+      if (this.loadState[i] !== 2 || this.textures[i].size === 0) return false;
+    }
+    return true;
+  }
+
+  prioritizeBackground(skins: number[]): void {
+    const unique = [...new Set(skins)];
+    for (let k = unique.length - 1; k >= 0; k--) {
+      const i = unique[k];
+      const state = this.loadState[i];
+      if (state === 0) {
+        this.loadState[i] = 1;
+        this.background.unshift(i);
+      } else if (state === 1 && !this.inflight.has(i) && !this.immediate.includes(i) && !this.urgent.includes(i)) {
+        const at = this.background.indexOf(i);
+        if (at > 0) {
+          this.background.splice(at, 1);
+          this.background.unshift(i);
+        }
+      } else if (state === 5) {
+        if (!this.backgroundPaused && this.uploads.length < 4) this.queueUpload(i);
+        else this.prepareLater.add(i);
+      }
+    }
+    this.pump();
+  }
+
   /** 给定皮肤加载完成后 resolve，并报告该集合的进度；这些图像会抢先于后台队列。 */
   loadNow(skins: number[], onProgress?: (done: number, total: number) => void): Promise<void> {
     const unique = [...new Set(skins)];
-    for (const i of unique) this.want(i, true);
-    const loaded = () => unique.reduce((n, i) => n + (this.loadState[i] === 2 ? 1 : 0), 0);
-    const report = () => onProgress?.(loaded(), unique.length);
-    report();
+    this.activeGates++;
+    let finished = false;
+    const ensure = (i: number) => {
+      if (this.loadState[i] === 3 && this.retries[i] < RETRY_LIMIT) {
+        this.retries[i]++;
+        this.loadState[i] = 0;
+      }
+      this.needsPrepare[i] = 1;
+      if (this.loadState[i] === 2 && !this.images[i]) this.loadState[i] = 0;
+      this.want(i, true);
+      if ((this.loadState[i] === 5 || (this.loadState[i] === 2 && this.textures[i].size === 0)) && this.images[i]) {
+        this.queueUpload(i);
+      }
+    };
+    for (const i of unique) ensure(i);
+    const isReady = (i: number) => this.loadState[i] === 2 && this.textures[i].size > 0;
+    const isTerminal = (i: number) => this.loadState[i] === 3 && this.retries[i] >= RETRY_LIMIT;
+    const loaded = () => unique.reduce((n, i) => n + (isReady(i) ? 1 : 0), 0);
     return new Promise((resolve) => {
-      const check = () => {
-        const done = loaded();
-        onProgress?.(done, unique.length);
-        if (done < unique.length) return false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        this.activeGates = Math.max(0, this.activeGates - 1);
         resolve();
+      };
+      const check = () => {
+        for (const i of unique) ensure(i);
+        onProgress?.(loaded(), unique.length);
+        if (!unique.every((i) => isReady(i) || isTerminal(i))) return false;
+        finish();
         return true;
       };
       if (!check()) this.waiters.push(check);
@@ -258,15 +353,21 @@ export class WebGLRenderer {
   }
 
   private want(i: number, priority = false): void {
-    if (this.loadState.length === 0 || this.loadState[i] === 2) return;
-    if (this.loadState[i] === 0) {
+    if (this.loadState.length === 0) return;
+    const state = this.loadState[i];
+    if (priority) this.needsPrepare[i] = 1;
+    if (state === 4) return;
+    if (state === 5) {
+      if (priority) this.queueUpload(i);
+      return;
+    }
+    if (state === 2 || state === 3) return;
+    if (state === 0) {
       this.loadState[i] = 1;
       (priority ? this.immediate : this.urgent).push(i);
       this.pump();
       return;
     }
-    // 当前画面要用的图像可能已经在后台队列里。把它提到最前面，避免菜单空白
-    // 等待整个模式预取队列；已经在加载中的图像不重复排队。
     if (priority && !this.inflight.has(i) && !this.immediate.includes(i)) {
       for (const queue of [this.urgent, this.background]) {
         const at = queue.indexOf(i);
@@ -278,42 +379,227 @@ export class WebGLRenderer {
   }
 
   private pump(): void {
-    while (this.loading < LOAD_CONCURRENCY) {
-      // 只有当前画面主动请求的图像才提前上传纹理。背景预取只解码图像；
-      // 为两千张不可见图像同步 prepare 会明显阻塞主线程。
+    while (this.loading < MAX_NET_CONCURRENCY) {
       let eager = true;
-      let i = this.immediate.shift();
-      if (i === undefined) {
-        eager = false;
-        i = this.urgent.shift();
+      let background = false;
+      let i: number | undefined;
+      if (this.urgentLoading < URGENT_NET_CONCURRENCY) {
+        i = this.immediate.shift();
+        if (i === undefined) {
+          eager = false;
+          i = this.urgent.shift();
+        }
       }
-      if (i === undefined) i = this.background.shift();
       if (i === undefined) {
-        while (this.nextBackground < this.skins.length && this.loadState[this.nextBackground] !== 0) this.nextBackground++;
-        if (this.nextBackground >= this.skins.length) return;
-        i = this.nextBackground++;
-        this.loadState[i] = 1;
+        if ((this.immediate.length > 0 || this.urgent.length > 0) && this.urgentLoading >= URGENT_NET_CONCURRENCY) return;
+        if (this.backgroundPaused || this.backgroundLoading >= BACKGROUND_CONCURRENCY) return;
+        eager = false;
+        background = true;
+        i = this.background.shift();
+        if (i === undefined) {
+          while (this.nextBackground < this.skins.length && this.loadState[this.nextBackground] !== 0) this.nextBackground++;
+          if (this.nextBackground >= this.skins.length) return;
+          i = this.nextBackground++;
+          this.loadState[i] = 1;
+        }
       }
       const idx = i;
-      // 同一张图像可能同时被后台队列和当前画面请求；只加载一次。
-      if (this.loadState[idx] === 2 || this.inflight.has(idx)) continue;
+      const state = this.loadState[idx];
+      if (state === 2 || state === 3 || state === 4 || state === 5 || this.inflight.has(idx)) continue;
       const file = this.skins[idx].file;
+      if (state === 0) this.loadState[idx] = 1;
+      if (!eager && !background) this.needsPrepare[idx] = 1;
+      const token = ++this.fetchSeq;
+      const fetchGen = this.loaderGen;
+      const item = this.itemGen[idx];
+      this.inflight.set(idx, token);
       this.loading++;
-      this.inflight.add(idx);
+      if (background) this.backgroundLoading++;
+      else this.urgentLoading++;
       loadImage(/^(blob|data|https?):/.test(file) ? file : `${this.base}${file}${this.assetSuffix}`, eager)
         .then((img) => (this.images[idx] = img), () => (this.images[idx] = null))
         .finally(() => {
-          if (this.images[idx] && eager) this.prepare(idx);
-          this.loadState[idx] = 2;
-          this.inflight.delete(idx);
+          if (this.inflight.get(idx) === token) this.inflight.delete(idx);
           this.loading--;
-          this.loaded++;
-          this.onProgress?.(this.loaded, this.skins.length);
-          this.waiters = this.waiters.filter((w) => !w());
+          if (background) this.backgroundLoading--;
+          else this.urgentLoading--;
+          if (fetchGen !== this.loaderGen || item !== this.itemGen[idx]) {
+            this.pump();
+            return;
+          }
+          const img = this.images[idx];
+          if (!img) {
+            this.loadState[idx] = 3;
+            this.needsPrepare[idx] = 0;
+            if (this.retries[idx] >= RETRY_LIMIT) this.settle(idx);
+          } else {
+            this.fetched++;
+            if (eager || this.needsPrepare[idx]) this.queueUpload(idx);
+            else {
+              this.loadState[idx] = 5;
+              if (!this.backgroundPaused) {
+                if (this.uploads.length < 4) this.queueUpload(idx);
+                else this.prepareLater.add(idx);
+              }
+            }
+          }
+          this.notify();
           this.pump();
         });
     }
   }
+
+  setBackgroundPaused(paused: boolean): void {
+    this.backgroundPaused = paused;
+    if (!paused) {
+      this.pump();
+      this.fillPrepareQueue();
+    }
+  }
+
+  setUploadGate(gate: () => boolean): void {
+    this.uploadGate = gate;
+    if (gate()) this.scheduleUploads();
+  }
+
+  kickUploads(): void {
+    if (this.uploads.length > 0) this.scheduleUploads();
+  }
+
+  private queueUpload(i: number): void {
+    const state = this.loadState[i];
+    if (state === 0 || state === 3 || state === 4) return;
+    this.loadState[i] = 4;
+    this.prepareLater.delete(i);
+    this.uploads.push({ idx: i, gen: ++this.uploadGen[i] });
+    this.scheduleUploads();
+  }
+
+  private fillPrepareQueue(): void {
+    if (this.backgroundPaused) return;
+    while (this.uploads.length < 4 && this.prepareLater.size > 0) {
+      const i = this.prepareLater.values().next().value as number | undefined;
+      if (i === undefined) break;
+      this.prepareLater.delete(i);
+      if (this.loadState[i] !== 5 || !this.images[i]) continue;
+      this.queueUpload(i);
+    }
+  }
+
+  private settle(i: number): void {
+    if (this.settledFlag[i]) return;
+    const ready = this.loadState[i] === 2 && this.textures[i].size > 0;
+    const terminal = this.loadState[i] === 3 && this.retries[i] >= RETRY_LIMIT;
+    if (!ready && !terminal) return;
+    this.settledFlag[i] = 1;
+    this.settled++;
+    this.onProgress?.(this.settled, this.skins.length);
+    this.notify();
+  }
+
+  private notify(): void {
+    if (this.waiters.length === 0) return;
+    this.waiters = this.waiters.filter((w) => !w());
+  }
+
+  evictExcept(keep: Set<number>): void {
+    if (this.activeGates > 0) return;
+    const gl = this.gl;
+    for (let i = 0; i < this.skins.length; i++) {
+      if (keep.has(i) || this.loadState[i] === 0) continue;
+      const textures = this.textures[i];
+      if (textures) {
+        for (const tex of textures.values()) if (tex) gl.deleteTexture(tex);
+        textures.clear();
+      }
+      const canvas = this.mipCanvas.get(i);
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+        this.mipCanvas.delete(i);
+      }
+      this.itemGen[i]++;
+      this.uploadGen[i]++;
+      this.prepareLater.delete(i);
+      this.inflight.delete(i);
+      this.penMissing.delete(i);
+      this.smoothed.delete(i);
+      this.images[i] = null;
+      this.loadState[i] = 0;
+      this.retries[i] = 0;
+      this.needsPrepare[i] = 0;
+      if (this.settledFlag[i]) this.settled = Math.max(0, this.settled - 1);
+      this.settledFlag[i] = 0;
+    }
+  }
+
+  private scheduleUploads(): void {
+    if (this.uploads.length === 0 || this.uploadRaf !== null || this.uploadTimeout !== null) return;
+    const gate = this.waiters.length > 0;
+    if (document.visibilityState === 'visible') {
+      this.uploadRaf = requestAnimationFrame(() => {
+        this.uploadRaf = null;
+        this.drainUploads();
+      });
+      if (gate) {
+        this.uploadTimeout = setTimeout(() => {
+          this.uploadTimeout = null;
+          this.drainUploads();
+        }, 100);
+      }
+    } else if (gate) {
+      this.uploadTimeout = setTimeout(() => {
+        this.uploadTimeout = null;
+        this.drainUploads();
+      }, 0);
+    }
+  }
+
+  private drainUploads(): void {
+    if (this.uploadRaf !== null) {
+      cancelAnimationFrame(this.uploadRaf);
+      this.uploadRaf = null;
+    }
+    if (this.uploadTimeout !== null) {
+      clearTimeout(this.uploadTimeout);
+      this.uploadTimeout = null;
+    }
+    const gate = this.waiters.length > 0;
+    if (document.visibilityState === 'hidden' && !gate) return;
+    if (!gate && !this.uploadGate()) {
+      this.scheduleUploads();
+      return;
+    }
+    const budget = document.visibilityState === 'hidden' ? HIDDEN_UPLOAD_BUDGET_MS : gate ? GATE_UPLOAD_BUDGET_MS : UPLOAD_BUDGET_MS;
+    const start = performance.now();
+    while (this.uploads.length > 0 && performance.now() - start < budget) {
+      const entry = this.uploads.shift()!;
+      if (entry.gen !== this.uploadGen[entry.idx] || this.loadState[entry.idx] !== 4 || !this.images[entry.idx]) continue;
+      try {
+        this.prepare(entry.idx);
+        this.loadState[entry.idx] = 2;
+        this.needsPrepare[entry.idx] = 0;
+        this.settle(entry.idx);
+      } catch {
+        this.images[entry.idx] = null;
+        this.loadState[entry.idx] = 3;
+        this.needsPrepare[entry.idx] = 0;
+        if (this.retries[entry.idx] >= RETRY_LIMIT) this.settle(entry.idx);
+      }
+      if (!gate && !this.uploadGate()) break;
+    }
+    this.fillPrepareQueue();
+    this.notify();
+    if (this.uploads.length > 0) this.scheduleUploads();
+  }
+
+  private onVisibility = (): void => {
+    if (this.uploadTimeout !== null) {
+      clearTimeout(this.uploadTimeout);
+      this.uploadTimeout = null;
+    }
+    this.scheduleUploads();
+  };
 
   /** 皮肤在绘制比例（百分比）下的纹理，按需创建矢量 mip。 */
   private skinTexture(skinIdx: number, scaleX: number, scaleY: number): WebGLTexture {
@@ -379,6 +665,11 @@ export class WebGLRenderer {
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     this.texParams();
     cache.set(level, tex);
+    if (this.loadState[skinIdx] === 4 || this.loadState[skinIdx] === 5) {
+      this.loadState[skinIdx] = 2;
+      this.needsPrepare[skinIdx] = 0;
+      this.settle(skinIdx);
+    }
     return tex;
   }
 

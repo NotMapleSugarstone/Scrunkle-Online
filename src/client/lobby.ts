@@ -12,7 +12,7 @@ import { clock, REPLAY_NAME_MAX, replayName, replayTitle, type ReplayMeta } from
 import { deleteReplay, importReplay, listReplays, renameReplay, REPLAY_FILE_TYPE, replayFile } from './replay-store.ts';
 import { VIDEO_QUALITIES, type VideoQuality } from './replay-viewer.ts';
 import { downloadFile, fileName } from './download.ts';
-import { actionLabel, currentText, displayLabel, keyLabel, loadNetLang, modeLabel, netFrameDelay, netReason, netText, saveNetLang, type NetLang, type NetTextKey } from './net-text.ts';
+import { actionLabel, currentFormat, currentText, displayLabel, keyLabel, loadNetLang, modeLabel, netFrameDelay, netReason, netText, saveNetLang, type NetLang, type NetTextKey } from './net-text.ts';
 import type { DisplayMode } from '../render/webgl.ts';
 
 const NAME_KEY = `${STORAGE_PREFIX}.name`;
@@ -487,11 +487,9 @@ export class Lobby {
     return name;
   }
 
-  /** 首张图片加载期间禁用游玩按钮，并显示进度。 */
-  setLoading(loading: boolean, text = ''): void {
+  setLoading(loading: boolean): void {
     this.loading = loading;
     for (const b of this.menu.querySelectorAll('button')) b.disabled = loading;
-    this.setStatus(text);
   }
 
   setOnline(available: boolean): void {

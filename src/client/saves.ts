@@ -82,8 +82,10 @@ export function codeFiles(onSaved: (name: string) => void): (rt: Runtime) => voi
  * 持续写入运行中游戏的存档：变化时最多每两秒一次，以及页面隐藏或关闭时。
  * 返回再写入一次并停止的函数。
  */
-export function keepSaving(game: () => Runtime): () => void {
+export function keepSaving(game: () => Runtime, inMatch: () => boolean = () => false): () => void {
   let last = JSON.stringify(capture(game()));
+  let timer = 0;
+  let stopped = false;
   const flush = () => {
     const text = JSON.stringify(capture(game()));
     if (text === last) return;
@@ -94,7 +96,24 @@ export function keepSaving(game: () => Runtime): () => void {
       // 存储可能被阻止或已满。
     }
   };
-  const timer = setInterval(flush, WRITE_EVERY_MS);
+  const tick = () => {
+    if (stopped) return;
+    if (inMatch()) {
+      timer = window.setTimeout(tick, WRITE_EVERY_MS);
+      return;
+    }
+    const write = () => {
+      if (stopped) return;
+      flush();
+      timer = window.setTimeout(tick, WRITE_EVERY_MS);
+    };
+    const idle = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    if (idle.requestIdleCallback) idle.requestIdleCallback(write, { timeout: 1000 });
+    else timer = window.setTimeout(write, 0);
+  };
+  timer = window.setTimeout(tick, WRITE_EVERY_MS);
   const onHide = () => {
     if (document.visibilityState === 'hidden') flush();
   };
@@ -102,7 +121,8 @@ export function keepSaving(game: () => Runtime): () => void {
   window.addEventListener('pagehide', flush);
   return () => {
     flush();
-    clearInterval(timer);
+    stopped = true;
+    window.clearTimeout(timer);
     document.removeEventListener('visibilitychange', onHide);
     window.removeEventListener('pagehide', flush);
   };
