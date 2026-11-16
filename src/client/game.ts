@@ -8,7 +8,7 @@ import { decodeMaskSet, type MaskSet } from '../engine/masks.ts';
 import maskUrl from '../game/masks.bin?url';
 import { pauseRule } from '../game/pause.ts';
 import { CODE_ANSWERS, HIDDEN_LISTS } from '../game/saves.ts';
-import { assetCacheSuffix } from '../game/page.ts';
+import { assetCacheSuffix } from './asset-cache.ts';
 import { WebGLRenderer } from '../render/webgl.ts';
 import { EFFECT_BITS } from '../render/shaders.ts';
 import { AudioOut, SHORT_SOUND_S } from './audio.ts';

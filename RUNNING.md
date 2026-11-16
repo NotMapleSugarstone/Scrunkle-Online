@@ -36,13 +36,15 @@ The defaults are arrows to move, **N** to attack/select, **M** for special/back,
 
 ## Online
 
-The rollback netcode and room client are present in `src/net/` and `src/client/online.ts`. This build uses the public relay:
+The rollback netcode and room client are present in `src/net/` and `src/client/online.ts`. `./run.sh` and `npm start` only serve the built files; they do not start a room server, and a build made without `RELAY_URL` hides the online controls.
+
+For local play, rebuild with the direct room Worker below, then run `./run.sh` again. It accepts any localhost origin:
 
 ```sh
 RELAY_URL=https://scrunkle-rooms.maplesugarstone.workers.dev npm run build
 ```
 
-The room server lives in `server/`; see the repository README for `npm run worker:dev` and deployment. The relay currently accepts browser origins `https://maplesugarstone.github.io` and localhost. Offline play works from any origin; online play from another GitHub Pages account needs the relay's `ALLOWED_ORIGINS` updated or a different relay.
+The room server lives in `server/`; see the repository README for `npm run worker:dev` and deployment. The GitHub Pages build uses a relay proxy that accepts only the published `notmaplesugarstone.github.io` origin, so that proxy cannot be used from a page served at `127.0.0.1`. Offline play works from any origin; online play from another GitHub Pages account needs the Worker's `ALLOWED_ORIGINS` updated or a matching relay.
 
 ## Original files
 
