@@ -7,6 +7,7 @@ import { installSilhouettes } from '../game/silhouettes.ts';
 import { decodeMaskSet, type MaskSet } from '../engine/masks.ts';
 import maskUrl from '../game/masks.bin?url';
 import { pauseRule } from '../game/pause.ts';
+import { characterSelect } from '../game/screens.ts';
 import { CODE_ANSWERS, HIDDEN_LISTS } from '../game/saves.ts';
 import { assetCacheSuffix } from './asset-cache.ts';
 import { WebGLRenderer } from '../render/webgl.ts';
@@ -17,6 +18,13 @@ import { Bubbles, ListMonitors, PauseMenu, QuestionBox, VarMonitors } from './ov
 export const ASSET_BASE = `${import.meta.env.BASE_URL}assets/`;
 
 const MENU_SPRITES = new Set(['UI', 'Transition', 'Text', 'Border']);
+const MENU_ART: Record<string, RegExp> = {
+  menu: /^(Menu\d|GameSelect|GameChoose|CSbg|Ready|p[12]chip|StageSelect)/,
+  setting: /^(Setting|SetDongle|KeybindUI|BindingButtons|slider|settinginfo)/i,
+  elevator: /^(elevator|floorselect|bossselect|upgrades|williamshop|shopitem)/,
+  lobby: /^(lobby|interactionN|the guy|storyopt|campaignscreen)/,
+  results: /^(vic|RFwin|continuetime|rank|postc)/,
+};
 
 /**
  * 游玩前预编译的着色器效果组合：游戏使用的颜色、亮度和幽灵效果的每种组合，
@@ -60,12 +68,17 @@ export class Game {
   /** 移植版的暂停菜单，用于带暂停规则的游戏。 */
   pause: PauseMenu | null;
   private prefetching = false;
-  private modePrefetching = false;
+  private prefetchMode = '';
+  private prefetchScale = 0;
+  private recentOpeners: number[] = [];
+  private fighterSlots: number[] = [];
+  private selectedFighters: number[] = [];
   private lastFighters = '';
   private fighterSkins = new Map<number, number[]>();
   private base: number[] | null = null;
   private nextFrameAt = 0;
   private activePlay = false;
+  private onlinePlay = false;
 
   constructor(
     public canvas: HTMLCanvasElement,
@@ -98,12 +111,12 @@ export class Game {
    * 加载接触遮罩并编译着色器；纹理、声音和音乐由 `startPrefetch` 与按需加载负责。
    * `load` 只等待启动所需资源，使大厅先出现；实际比赛开始再由 `preloadForFight` 等待图像。
    */
-  async load(onProgress: (done: number, total: number) => void): Promise<void> {
+  async load(onProgress?: (done: number, total: number) => void): Promise<void> {
     const counts = { images: [0, skins.length], sounds: [0, this.rt.sprites.reduce((n, s) => n + s.sounds.length, 0)] };
-    const report = () => onProgress(counts.images[0] + counts.sounds[0], counts.images[1] + counts.sounds[1]);
+    const report = () => onProgress?.(counts.images[0] + counts.sounds[0], counts.images[1] + counts.sounds[1]);
     const suffix = assetCacheSuffix();
-    this.renderer.startLoading(ASSET_BASE, GAME_EFFECTS, (d, n) => ((counts.images = [d, n]), report()), suffix);
-    this.audio.startLoading(this.rt, ASSET_BASE, (d, n) => ((counts.sounds = [d, n]), report()), suffix);
+    this.renderer.startLoading(ASSET_BASE, GAME_EFFECTS, onProgress && ((d, n) => ((counts.images = [d, n]), report())), suffix);
+    this.audio.startLoading(this.rt, ASSET_BASE, onProgress && ((d, n) => ((counts.sounds = [d, n]), report())), suffix);
     masks = await loadMasks(suffix);
     installSilhouettes(this.rt, masks);
   }
@@ -113,12 +126,14 @@ export class Game {
     this.prefetching = true;
     this.audio.prefetchShort();
     // 共用素材和模式素材只填充空闲队列；当前菜单、斗士和过场会抢占它们。
-    this.renderer.loadLater(this.baseSkins());
     this.prefetchSelection();
     this.prefetchModeAssets();
   }
 
   setOnlinePlay(on: boolean): void {
+    this.onlinePlay = on;
+    this.nextFrameAt = 0;
+    this.prefetchMode = '';
     this.setActivePlay(on);
     this.renderer.setBackgroundPaused(on);
   }
@@ -134,27 +149,29 @@ export class Game {
 
   private canRunBackgroundUpload(): boolean {
     if (!this.activePlay) return true;
-    return this.nextFrameAt <= 0 || performance.now() >= this.nextFrameAt - FRAME_MS;
+    return this.nextFrameAt <= 0 || this.nextFrameAt - performance.now() > SLACK_MS + 3;
   }
 
-  evictInactive(includeAudio = true): void {
+  evictInactive(keepShared = true): void {
     const ids = this.fighterIds();
     const keep = new Set<number>([
-      ...this.baseSkins(),
+      ...(keepShared ? this.baseSkins() : []),
       ...this.visibleSkins(),
       ...this.fighterSkinsFor(ids),
       ...this.cutsceneSkinsFor(ids),
+      ...this.recentOpeners,
     ]);
     this.renderer.evictExcept(keep);
-    if (includeAudio) this.audio.evictLong(this.rt, 3);
+    this.prefetchMode = '';
+    this.audio.evictLong(this.rt, 3);
   }
 
   /**
    * 进入游戏前等待共用图像和短音效加载完毕；长音乐仍在播放时按需加载。
    * `onProgress` 同时统计图像和短音效，供等待进度回调使用。
    */
-  async preloadForPlay(onProgress: (done: number, total: number) => void): Promise<void> {
-    this.evictInactive(true);
+  async preloadForPlay(onProgress?: (done: number, total: number) => void): Promise<void> {
+    this.evictInactive();
     this.startPrefetch();
     const ids = this.fighterIds();
     const skins = [...new Set([
@@ -166,27 +183,29 @@ export class Game {
     let imageTotal = skins.length;
     const report = () => {
       const [soundDone, soundTotal] = this.audio.shortProgress();
-      onProgress(imageDone + soundDone, imageTotal + soundTotal);
+      onProgress?.(imageDone + soundDone, imageTotal + soundTotal);
     };
-    const timer = window.setInterval(report, 100);
+    const timer = onProgress && window.setInterval(report, 100);
     try {
       await Promise.all([
-        this.renderer.loadNow(skins, (done, total) => {
+        this.renderer.loadNow(skins, onProgress && ((done, total) => {
           imageDone = done;
           imageTotal = total;
           report();
-        }),
+        })),
         this.audio.shortLoaded(SHORT_SOUND_S),
       ]);
     } finally {
-      window.clearInterval(timer);
-      report();
+      if (timer !== undefined) {
+        window.clearInterval(timer);
+        report();
+      }
     }
   }
 
   /** 实际比赛开始前只等待当前画面、斗士和其过场帧；共用素材继续在后台加载。 */
-  async preloadForFight(onProgress: (done: number, total: number) => void): Promise<void> {
-    this.evictInactive(false);
+  async preloadForFight(onProgress?: (done: number, total: number) => void): Promise<void> {
+    this.evictInactive();
     this.startPrefetch();
     const ids = this.fighterIds();
     const skins = [...new Set([
@@ -197,14 +216,12 @@ export class Game {
     await this.renderer.loadNow(skins, onProgress);
   }
 
-  async preloadForSwitch(onProgress: (done: number, total: number) => void): Promise<void> {
+  async preloadForSwitch(onProgress?: (done: number, total: number) => void): Promise<void> {
     const ids = this.fighterIds();
     const gate = [...new Set([...this.visibleSkins(), ...this.firstSkinsFor(ids, 4)])];
-    const shown = new Set(gate);
+    const rt = this.rt;
     await this.renderer.loadNow(gate, onProgress);
-    const rest = this.fighterSkinsFor(ids).filter((i) => !shown.has(i));
-    if (rest.length > 0) this.renderer.prioritizeBackground(rest);
-    this.lastFighters = ids.join(',');
+    if (this.rt === rt && this.fighterKey() === ids.join(',')) this.queueSwitchBackground();
   }
 
   canInstantSwitch(): boolean {
@@ -215,42 +232,60 @@ export class Game {
   queueSwitchBackground(): void {
     const ids = this.fighterIds();
     const visible = new Set(this.visibleSkins());
+    this.trimPreviousFighters(ids, visible);
     const rest = this.fighterSkinsFor(ids).filter((i) => !visible.has(i));
     if (rest.length > 0) this.renderer.prioritizeBackground(rest);
     this.lastFighters = ids.join(',');
+  }
+
+  private trimPreviousFighters(ids: number[], visible: Set<number>): void {
+    const departed = this.lastFighters.split(',').map(Number).filter((id) => id > 0 && !ids.includes(id));
+    if (departed.length) {
+      const old = [...this.fighterSkinsFor(departed), ...this.cutsceneSkinsFor(departed), ...this.recentOpeners];
+      this.recentOpeners = this.firstSkinsFor(departed, 4);
+      const keep = new Set([...visible, ...this.fighterSkinsFor(ids), ...this.cutsceneSkinsFor(ids), ...this.recentOpeners]);
+      this.renderer.evictSkins(old, keep);
+      this.prefetchMode = '';
+    }
   }
 
   /**
    * 进入离线游戏前只等待当前菜单实际可见的图像，避免收起大厅后先出现空白画面。
    * 其余菜单、模式和过场素材仍在后台预取。
    */
-  async preloadCurrentView(onProgress: (done: number, total: number) => void): Promise<void> {
+  async preloadCurrentView(onProgress?: (done: number, total: number) => void): Promise<void> {
     await this.renderer.loadNow(this.visibleSkins(), onProgress);
   }
 
-  /**
-   * 过场开始时等待全部过场帧。它们通常已由 `prefetchModeAssets` 在后台排队，
-   * 因此缓存命中时无需等待；冷缓存时也不会先画出缺帧的第一帧。
-   */
-  async preloadForCutscene(onProgress: (done: number, total: number) => void): Promise<void> {
+  async preloadForCutscene(onProgress?: (done: number, total: number) => void): Promise<void> {
     this.startPrefetch();
-    await this.renderer.loadNow(this.allCutsceneSkins(), onProgress);
+    const seat = Number(this.rt.stage.v.Cutscene_Num) - 1;
+    const id = Number(this.rt.stage.l.P_Char?.[seat]);
+    const frames = Number(this.rt.stage.v.Num_storybattle) !== 4 && id > 0 ? this.cutsceneSkinsFor([id]) : this.allCutsceneSkins();
+    await this.renderer.loadNow([...this.visibleSkins(), ...frames], onProgress);
   }
 
-  /**
-   * 所有模式都可能用到的非角色图像：全部过场帧、MenuUI 的模式画面和训练用的 Hitbox Engine。
-   * 不包含任何斗士造型；角色仍按当前选择加载，避免把所有 2,180 张斗士图塞进启动队列。
-   */
   private prefetchModeAssets(): void {
-    if (this.modePrefetching) return;
-    this.modePrefetching = true;
-    const add = [...new Set([
-      ...this.allCutsceneSkins(),
-      ...this.menuModeSkins(),
-      ...this.stageModeSkins(),
-      ...this.hitboxSkins(),
-    ])];
-    if (add.length > 0) this.renderer.loadLater(add);
+    if (this.onlinePlay) return;
+    const backdrop = this.rt.stage.costumeName().replace(/\d+$/, '');
+    const menu = Object.hasOwn(MENU_ART, backdrop) ? backdrop : 'menu';
+    const mode = Number(this.rt.stage.v.training) === 1 ? 'training' : this.activePlay ? 'fight' : menu;
+    const scale = this.renderer.prepareScale;
+    if (mode === this.prefetchMode && scale === this.prefetchScale) return;
+    this.prefetchMode = mode;
+    this.prefetchScale = scale;
+    const candidates: number[] = [];
+    if (mode === 'training') {
+      const neighbors = this.fighterIds().flatMap((id) => [id - 1, id + 1]);
+      candidates.push(...this.firstSkinsFor(neighbors, 4), ...this.hitboxSkins());
+    }
+    if (mode === 'fight' || mode === 'training') {
+      const fx = this.rt.sprites.find((s) => s.name === 'FX');
+      if (fx) for (const c of fx.costumes) if (/^(DashFX|HitFx|HitStar|gain|pop|Bubble)/i.test(c.name)) candidates.push(c.skin);
+    } else {
+      candidates.push(...this.menuModeSkins(mode));
+    }
+    this.renderer.prefetchOptional(candidates);
   }
 
   /** 全部过场帧；关闭过场时不排队。 */
@@ -271,19 +306,14 @@ export class Game {
     const stage = this.rt.stage as unknown as { sprite: { costumes: { skin: number }[] }; currentCostume: number };
     const backdrop = stage.sprite.costumes[stage.currentCostume];
     if (backdrop) out.push(backdrop.skin);
+    for (const cmd of this.rt.pen.cmds) if (cmd.op === 'stamp') out.push(cmd.skin);
     return [...new Set(out)];
   }
 
-  /** MenuUI 的模式画面、塔、经典模式、故事、训练和设置界面。 */
-  private menuModeSkins(): number[] {
+  private menuModeSkins(mode: string): number[] {
     const sprite = this.rt.sprites.find((s) => s.name === 'MenuUI');
-    return sprite ? sprite.costumes.map((c) => c.skin) : [];
-  }
-
-  /** 故事、塔、大厅、教程等模式使用的舞台背景；不只包括 stage* 战斗背景。 */
-  private stageModeSkins(): number[] {
-    const sprite = this.rt.sprites.find((s) => s.name === 'Stage');
-    return sprite ? sprite.costumes.map((c) => c.skin) : [];
+    if (!sprite) return [];
+    return sprite.costumes.filter((c) => MENU_ART[mode].test(c.name)).map((c) => c.skin);
   }
 
   /** 训练模式的碰撞盒/高级判定显示。 */
@@ -313,14 +343,13 @@ export class Game {
 
   /**
    * 有必杀过场的角色由 `starting_frames` 指定；`P_Char` 是 1 起始的索引。
-   * 比赛只取当前斗士的帧；全部过场帧由模式预取在后台排队。
    * 设置中关闭过场动画时不加载这些帧。
    */
-  private cutsceneSkinsFor(ids: number[], all = false): number[] {
+  private cutsceneSkinsFor(ids: number[]): number[] {
     if (!this.cutscenesEnabled()) return [];
     const stage = this.rt.stage as unknown as { l: { starting_frames?: (number | string)[] } };
     const starters = (stage.l.starting_frames ?? []).map((frame) => String(frame));
-    const candidates = all ? starters : ids.map((id) => starters[id - 1]);
+    const candidates = ids.map((id) => starters[id - 1]);
     const prefixes = candidates.filter((prefix): prefix is string => Boolean(prefix));
     if (prefixes.length === 0) return [];
     const sprite = this.rt.sprites.find((s) => s.name === 'cutscene');
@@ -356,14 +385,14 @@ export class Game {
     const ids = this.fighterIds();
     const key = ids.join(',');
     if (key === this.lastFighters) return;
-    this.lastFighters = key;
     const gate = [...new Set([...this.visibleSkins(), ...this.firstSkinsFor(ids, 4)])];
     const shown = new Set(gate);
+    if (!this.onlinePlay && characterSelect(this.rt)) this.trimPreviousFighters(ids, shown);
+    this.lastFighters = key;
     if (gate.length > 0) void this.renderer.loadNow(gate);
     const rest = this.fighterSkinsFor(ids).filter((i) => !shown.has(i));
     if (rest.length > 0) this.renderer.prioritizeBackground(rest);
-    const cutscenes = this.cutsceneSkinsFor(ids).filter((i) => !shown.has(i));
-    if (cutscenes.length > 0) this.renderer.loadLater(cutscenes);
+    if (this.onlinePlay) this.renderer.loadLater(this.cutsceneSkinsFor(ids));
   }
 
   private firstSkinsFor(ids: number[], count: number): number[] {
@@ -378,10 +407,12 @@ export class Game {
   }
 
   private fighterIds(): number[] {
-    const stage = this.rt.stage as unknown as { l: { P_Char?: (number | string)[] } };
-    return [...new Set((stage.l.P_Char ?? []).map(Number))]
-      .filter((n) => Number.isFinite(n) && n > 0)
-      .sort((a, b) => a - b);
+    const slots: readonly (number | string)[] = this.rt.stage.l.P_Char ?? [];
+    if (slots.length !== this.fighterSlots.length || slots.some((v, i) => Number(v) !== this.fighterSlots[i])) {
+      this.fighterSlots = slots.map(Number);
+      this.selectedFighters = [...new Set(this.fighterSlots)].filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+    }
+    return this.selectedFighters;
   }
 
   private fighterSkinsFor(ids: number[]): number[] {
@@ -416,7 +447,10 @@ export class Game {
     this.vars.update(this.rt);
     this.bubbles.update(this.rt);
     this.pause?.update(this.rt);
-    if (this.prefetching) this.prefetchSelection();
+    if (this.prefetching) {
+      this.prefetchSelection();
+      this.prefetchModeAssets();
+    }
     this.renderer.kickUploads();
   }
 }
@@ -436,7 +470,7 @@ export function startFixedLoop(tick: () => void, after: () => void, onNext?: (ne
   const clock = () => performance.timeOrigin + performance.now();
   let next = clock() + FRAME_MS;
   let stopped = false;
-  const publish = () => onNext?.(next);
+  const publish = () => onNext?.(next - performance.timeOrigin);
   const run = (now: number) => {
     // 长时间卡顿后，循环会跳过遗漏的帧，而不是一次性补播。
     if (now - next > 250) next = now;
@@ -464,6 +498,7 @@ export function startFixedLoop(tick: () => void, after: () => void, onNext?: (ne
   let beatTimer = 0;
   let fallback = 0;
   let worker: Worker | null = null;
+  let workerUrl: string | null = null;
   let heard = false;
   const beat = () => {
     const now = clock();
@@ -473,6 +508,10 @@ export function startFixedLoop(tick: () => void, after: () => void, onNext?: (ne
     if (worker) {
       worker.terminate();
       worker = null;
+    }
+    if (workerUrl) {
+      URL.revokeObjectURL(workerUrl);
+      workerUrl = null;
     }
     clearTimeout(beatTimer);
     clearTimeout(fallback);
@@ -484,7 +523,8 @@ export function startFixedLoop(tick: () => void, after: () => void, onNext?: (ne
     let failed = false;
     try {
       const source = `const beat = () => { postMessage(0); setTimeout(beat, ${period}); }; beat();`;
-      worker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
+      workerUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+      worker = new Worker(workerUrl);
       worker.onmessage = () => {
         heard = true;
         beat();

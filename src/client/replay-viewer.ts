@@ -84,6 +84,8 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   };
   let stopLoop = () => {};
   let ready = false;
+  let stopped = false;
+  let waitingForView = false;
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') exit.click();
     else if (!ready || !controls(e.key)) return;
@@ -92,10 +94,12 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   window.addEventListener('keydown', onKey);
   let recorder: MediaRecorder | null = null;
   const stop = () => {
+    stopped = true;
     stopLoop();
     window.removeEventListener('keydown', onKey);
     // 提前停止的录制会被丢弃。
     if (recorder && recorder.state !== 'inactive') recorder.stop();
+    else if (recorder) for (const track of recorder.stream.getTracks()) track.stop();
     if (o.video) {
       game.audio.endCapture();
       o.video.setCanvasSize(null);
@@ -113,7 +117,6 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
     tell(currentText('cannotPlayReplay'));
     return stop;
   }
-  game.audio.resync(rt());
 
   const frames = replayFrames(body);
   const total = frames.length;
@@ -139,6 +142,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
 
   /** 无声跳转到第 `n` 帧，从不超过它的最近保留状态开始。 */
   function seek(n: number): void {
+    if (!ready) return;
     n = Math.max(0, Math.min(total, n));
     if (n < at || n - at > KEEP_EVERY) {
       let from = 0;
@@ -164,7 +168,7 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   });
   const step = button(currentText('step'), currentText('replayStepHint'), () => {
     setPaused(true);
-    if (at < total) advance();
+    if (ready && at < total) advance();
     draw();
   });
   const rate = button('1x', currentText('replaySpeedHint'), () => {
@@ -206,14 +210,36 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
   }
   /** 绘制当前帧，不重复播放声音。 */
   function draw(): void {
-    rt().soundEvents.length = 0;
-    game.renderer.render(rt());
+    showFrame(true);
+  }
+
+  function showFrame(silent: boolean): void {
+    if (!ready || waitingForView) return;
+    if (!game.renderer.viewReady(rt())) {
+      waitingForView = true;
+      if (recorder?.state === 'recording') recorder.pause();
+      void game.preloadCurrentView().then(() => {
+        waitingForView = false;
+        if (stopped) return;
+        if (recorder?.state === 'paused') recorder.resume();
+        showFrame(paused || silent);
+      }).catch(() => {
+        waitingForView = false;
+        if (!stopped) tell(currentText('cannotPlayReplay'));
+      });
+      return;
+    }
+    if (silent) {
+      rt().soundEvents.length = 0;
+      game.renderer.render(rt());
+    } else game.present();
     update();
+    if (at >= total && recorder?.state === 'recording') finishVideo();
   }
 
   stopLoop = startFixedLoop(
     () => {
-      if (paused) return;
+      if (!ready || paused || waitingForView) return;
       carry += SPEEDS[speed];
       while (carry >= 1 && at < total) {
         advance();
@@ -221,17 +247,11 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
       }
       if (at >= total) {
         paused = true;
-        if (recorder) {
-          if (recorder.state === 'recording') finishVideo();
-        } else if (!mismatch) tell(currentText('endReplay'));
+        if (!recorder && !mismatch) tell(currentText('endReplay'));
       }
     },
     () => {
-      if (paused) draw();
-      else {
-        game.present();
-        update();
-      }
+      showFrame(paused);
     },
   );
   let finishVideo = () => {};
@@ -246,8 +266,6 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
     exit.title = currentText('cancelRecording');
     if (o.warning) tell(o.warning);
     video.setCanvasSize([quality.width, quality.height]);
-    game.present();
-    game.audio.resume();
     const tracks = [...game.canvas.captureStream(30).getVideoTracks(), ...game.audio.capture().getAudioTracks()];
     const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: type, videoBitsPerSecond: quality.bitrate, audioBitsPerSecond: 160_000 });
     const chunks: Blob[] = [];
@@ -265,14 +283,24 @@ export function runReplayViewer(o: ReplayViewerOptions): () => void {
       complete = true;
       rec.stop();
     };
-    rec.start(1000);
     recorder = rec;
   } else if (o.warning) {
     paused = true;
     tell(o.warning);
   }
-  ready = true;
   update();
-  game.present();
+  game.setActivePlay(true);
+  void game.preloadForFight().then(() => {
+    if (stopped) return;
+    game.audio.resync(rt());
+    game.present();
+    if (recorder) {
+      game.audio.resume();
+      recorder.start(1000);
+    }
+    ready = true;
+  }).catch(() => {
+    if (!stopped) tell(currentText('cannotPlayReplay'));
+  });
   return stop;
 }

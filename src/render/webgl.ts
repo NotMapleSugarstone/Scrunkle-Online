@@ -45,6 +45,7 @@ const UPLOAD_BUDGET_MS = 3;
 const GATE_UPLOAD_BUDGET_MS = 6;
 const HIDDEN_UPLOAD_BUDGET_MS = 50;
 const RETRY_LIMIT = 2;
+const OPTIONAL_TEXTURE_BYTES = 32 * 1024 * 1024;
 
 interface Program {
   prog: WebGLProgram;
@@ -198,11 +199,10 @@ export class WebGLRenderer {
   private urgent: number[] = [];
   private immediate: number[] = [];
   private background: number[] = [];
-  private nextBackground = 0;
+  private optionalSkins = new Map<number, number>();
   private loading = 0;
   private backgroundLoading = 0;
   private urgentLoading = 0;
-  private fetched = 0;
   private settled = 0;
   private fetchSeq = 0;
   private inflight = new Map<number, number>();
@@ -213,7 +213,8 @@ export class WebGLRenderer {
   private uploadRaf: number | null = null;
   private uploadTimeout: ReturnType<typeof setTimeout> | null = null;
   private uploadGate: () => boolean = () => true;
-  private activeGates = 0;
+  private waiters = new Map<number, Set<(i: number) => void>>();
+  private gates = new Set<Set<number>>();
 
   /**
    * 从 `base`（资源文件夹的 URL 前缀）开始加载造型图像，并为 `effects` 编译着色器。
@@ -234,10 +235,8 @@ export class WebGLRenderer {
     this.loading = 0;
     this.backgroundLoading = 0;
     this.urgentLoading = 0;
-    this.fetched = 0;
     this.settled = 0;
-    this.activeGates = 0;
-    this.waiters.length = 0;
+    this.optionalSkins.clear();
     this.inflight.clear();
     this.urgent.length = 0;
     this.immediate.length = 0;
@@ -250,7 +249,7 @@ export class WebGLRenderer {
     this.uploadTimeout = null;
     for (const bits of [0, ...effects]) this.program(false, bits);
     this.program(true, 0);
-    this.nextBackground = this.skins.length;
+    for (const i of this.waiters.keys()) this.want(i, true);
     this.pump();
   }
 
@@ -264,9 +263,58 @@ export class WebGLRenderer {
     this.pump();
   }
 
+  get prepareScale(): number {
+    if (this.display === 'handheld') return this.handheldScale;
+    if (this.display === 'flash') return 1;
+    return Math.max(1, this.canvas.width / NATIVE_W, this.canvas.height / NATIVE_H);
+  }
+
+  prefetchOptional(candidates: number[]): void {
+    const selected = new Map<number, number>();
+    let remaining = OPTIONAL_TEXTURE_BYTES;
+    const scale = this.prepareScale;
+    for (const i of new Set(candidates)) {
+      if (this.loadState[i] !== 0 && !this.optionalSkins.has(i)) continue;
+      const skin = this.skins[i];
+      let factor = skin.res;
+      if (skin.kind === 'svg') {
+        factor = this.display === 'handheld' ? this.handheldScale : 2 ** Math.ceil(Math.log2(Math.min(scale, skin.maxScale)));
+      }
+      const bytes = Math.max(this.optionalSkins.get(i) ?? 0, 4 * Math.ceil(skin.w * factor) * Math.ceil(skin.h * factor));
+      if (bytes > remaining) continue;
+      remaining -= bytes;
+      selected.set(i, bytes);
+    }
+    this.evictSkins([...this.optionalSkins.keys()].filter((i) => !selected.has(i)));
+    this.optionalSkins = selected;
+    this.loadLater([...selected.keys()]);
+  }
+
   areReady(skins: number[]): boolean {
     for (const i of new Set(skins)) {
       if (this.loadState[i] !== 2 || this.textures[i].size === 0) return false;
+    }
+    return true;
+  }
+
+  private complete(i: number): boolean {
+    return this.loadState[i] === 2 || (this.loadState[i] === 3 && this.retries[i] >= RETRY_LIMIT);
+  }
+
+  viewReady(rt: Runtime): boolean {
+    const ready = (costumes: { skin: number }[], index: number): boolean => {
+      const c = costumes[index];
+      return !c || this.complete(c.skin);
+    };
+    if (!ready(rt.stage.sprite.costumes, rt.stage.currentCostume)) return false;
+    for (const t of rt.drawList) {
+      if (t.visible && !ready(t.sprite.costumes, t.currentCostume)) return false;
+    }
+    const cmds = rt.pen.cmds;
+    const from = cmds === this.penArr && this.penEpoch === rt.penEpoch && this.penDrawn <= cmds.length ? this.penDrawn : 0;
+    for (let i = from; i < cmds.length; i++) {
+      const cmd = cmds[i];
+      if (cmd.op === 'stamp' && !this.complete(cmd.skin)) return false;
     }
     return true;
   }
@@ -275,6 +323,7 @@ export class WebGLRenderer {
     const unique = [...new Set(skins)];
     for (let k = unique.length - 1; k >= 0; k--) {
       const i = unique[k];
+      this.optionalSkins.delete(i);
       const state = this.loadState[i];
       if (state === 0) {
         this.loadState[i] = 1;
@@ -295,45 +344,43 @@ export class WebGLRenderer {
 
   /** 给定皮肤加载完成后 resolve，并报告该集合的进度；这些图像会抢先于后台队列。 */
   loadNow(skins: number[], onProgress?: (done: number, total: number) => void): Promise<void> {
-    const unique = [...new Set(skins)];
-    this.activeGates++;
-    let finished = false;
-    const ensure = (i: number) => {
-      if (this.loadState[i] === 3 && this.retries[i] < RETRY_LIMIT) {
-        this.retries[i]++;
-        this.loadState[i] = 0;
-      }
-      this.needsPrepare[i] = 1;
-      if (this.loadState[i] === 2 && !this.images[i]) this.loadState[i] = 0;
-      this.want(i, true);
-      if ((this.loadState[i] === 5 || (this.loadState[i] === 2 && this.textures[i].size === 0)) && this.images[i]) {
-        this.queueUpload(i);
-      }
-    };
-    for (const i of unique) ensure(i);
-    const isReady = (i: number) => this.loadState[i] === 2 && this.textures[i].size > 0;
-    const isTerminal = (i: number) => this.loadState[i] === 3 && this.retries[i] >= RETRY_LIMIT;
-    const loaded = () => unique.reduce((n, i) => n + (isReady(i) ? 1 : 0), 0);
+    const unique = new Set(skins);
+    this.gates.add(unique);
     return new Promise((resolve) => {
-      const finish = () => {
-        if (finished) return;
-        finished = true;
-        this.activeGates = Math.max(0, this.activeGates - 1);
-        resolve();
+      let remaining = 0;
+      let failed = 0;
+      const report = () => {
+        onProgress?.(unique.size - remaining - failed, unique.size);
+        if (!remaining) {
+          this.gates.delete(unique);
+          resolve();
+        }
       };
-      const check = () => {
-        for (const i of unique) ensure(i);
-        onProgress?.(loaded(), unique.length);
-        if (!unique.every((i) => isReady(i) || isTerminal(i))) return false;
-        finish();
-        return true;
+      const settled = (i: number) => {
+        remaining--;
+        if (this.loadState[i] === 3) failed++;
+        report();
       };
-      if (!check()) this.waiters.push(check);
+      for (const i of unique) {
+        this.optionalSkins.delete(i);
+        if (this.complete(i)) {
+          if (this.loadState[i] === 3) failed++;
+          continue;
+        }
+        remaining++;
+        let listeners = this.waiters.get(i);
+        if (!listeners) {
+          listeners = new Set();
+          this.waiters.set(i, listeners);
+        }
+        listeners.add(settled);
+        if (this.loadState[i] === 3) this.retry(i);
+        else this.want(i, true);
+      }
+      report();
+      this.scheduleUploads();
     });
   }
-
-  /** 每个在其皮肤加载完成后返回 true，随后被移除。 */
-  private waiters: (() => boolean)[] = [];
 
   /**
    * 按画布当前比例制作皮肤纹理，方法是将它绘制到一个像素中，使驱动现在上传图像，
@@ -348,12 +395,16 @@ export class WebGLRenderer {
     gl.enable(gl.SCISSOR_TEST);
     gl.scissor(0, 0, 1, 1);
     const fx = { color: 0, fisheye: 0, whirl: 0, pixelate: 0, mosaic: 0, brightness: 0, ghost: 0 };
-    this.drawSprite({ skin: i, x: 0, y: 0, sx: 100, sy: 100, dir: 90, fx }, this.stageProj, f, f);
-    gl.disable(gl.SCISSOR_TEST);
+    try {
+      this.drawSprite({ skin: i, x: 0, y: 0, sx: 100, sy: 100, dir: 90, fx }, this.stageProj, f, f, true);
+    } finally {
+      gl.disable(gl.SCISSOR_TEST);
+    }
   }
 
   private want(i: number, priority = false): void {
     if (this.loadState.length === 0) return;
+    this.optionalSkins.delete(i);
     const state = this.loadState[i];
     if (priority) this.needsPrepare[i] = 1;
     if (state === 4) return;
@@ -392,16 +443,11 @@ export class WebGLRenderer {
       }
       if (i === undefined) {
         if ((this.immediate.length > 0 || this.urgent.length > 0) && this.urgentLoading >= URGENT_NET_CONCURRENCY) return;
-        if (this.backgroundPaused || this.backgroundLoading >= BACKGROUND_CONCURRENCY) return;
+        if (this.backgroundPaused || document.hidden || this.backgroundLoading >= BACKGROUND_CONCURRENCY) return;
         eager = false;
         background = true;
         i = this.background.shift();
-        if (i === undefined) {
-          while (this.nextBackground < this.skins.length && this.loadState[this.nextBackground] !== 0) this.nextBackground++;
-          if (this.nextBackground >= this.skins.length) return;
-          i = this.nextBackground++;
-          this.loadState[i] = 1;
-        }
+        if (i === undefined) return;
       }
       const idx = i;
       const state = this.loadState[idx];
@@ -417,23 +463,21 @@ export class WebGLRenderer {
       if (background) this.backgroundLoading++;
       else this.urgentLoading++;
       loadImage(/^(blob|data|https?):/.test(file) ? file : `${this.base}${file}${this.assetSuffix}`, eager)
-        .then((img) => (this.images[idx] = img), () => (this.images[idx] = null))
-        .finally(() => {
+        .catch(() => null)
+        .then((img) => {
+          if (fetchGen !== this.loaderGen) return;
           if (this.inflight.get(idx) === token) this.inflight.delete(idx);
           this.loading--;
           if (background) this.backgroundLoading--;
           else this.urgentLoading--;
-          if (fetchGen !== this.loaderGen || item !== this.itemGen[idx]) {
+          if (item !== this.itemGen[idx]) {
             this.pump();
             return;
           }
-          const img = this.images[idx];
+          this.images[idx] = img;
           if (!img) {
-            this.loadState[idx] = 3;
-            this.needsPrepare[idx] = 0;
-            if (this.retries[idx] >= RETRY_LIMIT) this.settle(idx);
+            this.failed(idx);
           } else {
-            this.fetched++;
             if (eager || this.needsPrepare[idx]) this.queueUpload(idx);
             else {
               this.loadState[idx] = 5;
@@ -443,7 +487,6 @@ export class WebGLRenderer {
               }
             }
           }
-          this.notify();
           this.pump();
         });
     }
@@ -494,19 +537,37 @@ export class WebGLRenderer {
     this.settledFlag[i] = 1;
     this.settled++;
     this.onProgress?.(this.settled, this.skins.length);
-    this.notify();
+    const listeners = this.waiters.get(i);
+    this.waiters.delete(i);
+    if (listeners) for (const done of listeners) done(i);
   }
 
-  private notify(): void {
-    if (this.waiters.length === 0) return;
-    this.waiters = this.waiters.filter((w) => !w());
+  private retry(i: number): void {
+    this.retries[i]++;
+    this.loadState[i] = 0;
+    this.want(i, true);
+  }
+
+  private failed(i: number): void {
+    this.loadState[i] = 3;
+    this.needsPrepare[i] = 0;
+    if (this.retries[i] >= RETRY_LIMIT) this.settle(i);
+    else if (this.waiters.has(i)) this.retry(i);
   }
 
   evictExcept(keep: Set<number>): void {
-    if (this.activeGates > 0) return;
+    this.evictSkins(this.loadState.keys(), keep);
+  }
+
+  evictSkins(skins: Iterable<number>, keep?: Set<number>): void {
     const gl = this.gl;
-    for (let i = 0; i < this.skins.length; i++) {
-      if (keep.has(i) || this.loadState[i] === 0) continue;
+    const protectedSkins = this.gates.size ? new Set(keep) : keep;
+    for (const gate of this.gates) for (const i of gate) protectedSkins!.add(i);
+    const removed = new Set<number>();
+    for (const i of skins) {
+      if (protectedSkins?.has(i) || this.loadState[i] === 0) continue;
+      removed.add(i);
+      this.optionalSkins.delete(i);
       const textures = this.textures[i];
       if (textures) {
         for (const tex of textures.values()) if (tex) gl.deleteTexture(tex);
@@ -531,16 +592,23 @@ export class WebGLRenderer {
       if (this.settledFlag[i]) this.settled = Math.max(0, this.settled - 1);
       this.settledFlag[i] = 0;
     }
+    if (!removed.size) return;
+    this.background = this.background.filter((i) => !removed.has(i));
+    this.immediate = this.immediate.filter((i) => !removed.has(i));
+    this.urgent = this.urgent.filter((i) => !removed.has(i));
+    this.uploads = this.uploads.filter(({ idx }) => !removed.has(idx));
   }
 
   private scheduleUploads(): void {
-    if (this.uploads.length === 0 || this.uploadRaf !== null || this.uploadTimeout !== null) return;
-    const gate = this.waiters.length > 0;
+    if (this.uploads.length === 0 || this.uploadTimeout !== null) return;
+    const gate = this.waiters.size > 0;
     if (document.visibilityState === 'visible') {
-      this.uploadRaf = requestAnimationFrame(() => {
-        this.uploadRaf = null;
-        this.drainUploads();
-      });
+      if (this.uploadRaf === null) {
+        this.uploadRaf = requestAnimationFrame(() => {
+          this.uploadRaf = null;
+          this.drainUploads();
+        });
+      }
       if (gate) {
         this.uploadTimeout = setTimeout(() => {
           this.uploadTimeout = null;
@@ -564,7 +632,7 @@ export class WebGLRenderer {
       clearTimeout(this.uploadTimeout);
       this.uploadTimeout = null;
     }
-    const gate = this.waiters.length > 0;
+    const gate = this.waiters.size > 0;
     if (document.visibilityState === 'hidden' && !gate) return;
     if (!gate && !this.uploadGate()) {
       this.scheduleUploads();
@@ -582,22 +650,24 @@ export class WebGLRenderer {
         this.settle(entry.idx);
       } catch {
         this.images[entry.idx] = null;
-        this.loadState[entry.idx] = 3;
-        this.needsPrepare[entry.idx] = 0;
-        if (this.retries[entry.idx] >= RETRY_LIMIT) this.settle(entry.idx);
+        this.failed(entry.idx);
       }
       if (!gate && !this.uploadGate()) break;
     }
     this.fillPrepareQueue();
-    this.notify();
     if (this.uploads.length > 0) this.scheduleUploads();
   }
 
   private onVisibility = (): void => {
+    if (this.uploadRaf !== null) {
+      cancelAnimationFrame(this.uploadRaf);
+      this.uploadRaf = null;
+    }
     if (this.uploadTimeout !== null) {
       clearTimeout(this.uploadTimeout);
       this.uploadTimeout = null;
     }
+    this.pump();
     this.scheduleUploads();
   };
 
@@ -732,8 +802,9 @@ export class WebGLRenderer {
   // ---------------------------------------------------------------- 绘制
 
   /** 用给定投影绘制一个可绘制对象；`fbScaleX/Y` 将舞台单位转换为目标像素。 */
-  private drawSprite(d: DrawState, projection: Float32Array, fbScaleX: number, fbScaleY: number): void {
+  private drawSprite(d: DrawState, projection: Float32Array, fbScaleX: number, fbScaleY: number, preparing = false): void {
     const gl = this.gl;
+    if (!preparing) this.optionalSkins.delete(d.skin);
     const skin = this.skins[d.skin];
     const scaleX = d.sx * fbScaleX;
     const scaleY = d.sy * fbScaleY;

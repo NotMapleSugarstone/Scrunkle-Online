@@ -113,6 +113,7 @@ function backToStart(view: 'menu' | 'replays' = 'menu'): void {
   game.setOnlinePlay(false);
   game.audio.stopAll();
   game.rt = Game.createRuntime({ seed: randomSeed(), t0: localT0() });
+  game.evictInactive();
   toast.hide();
   touch.setPlaying(false);
   game.present();
@@ -191,10 +192,18 @@ function applyCutsceneDefault(rt: Game['rt']): void {
 const lobby = new Lobby(overlay, {
   async local() {
     game.setOnlinePlay(false);
-    game.evictInactive(true);
+    game.evictInactive();
     game.startPrefetch();
     // 等待进入游戏后新出现的可见图像；不显示加载画面，完成后再收起大厅。
-    await withLoading((progress) => game.preloadCurrentView(progress));
+    lobby.setLoading(true);
+    try {
+      await game.preloadCurrentView();
+    } catch (e) {
+      lobby.setStatus(currentFormat('couldNotLoad', { error: String(e) }));
+      return;
+    } finally {
+      lobby.setLoading(false);
+    }
     lobby.hide();
     game.present();
     input.enabled = true;
@@ -214,6 +223,22 @@ const lobby = new Lobby(overlay, {
     let readyFighters = '';
     let readyCutscene = '';
     let stopped = false;
+    const present = () => {
+      game.present();
+      saveCodes(game.rt);
+    };
+    const loadError = (e: unknown) => toast.show(currentFormat('couldNotLoad', { error: String(e) }), 4000);
+    const presentWhenReady = () => {
+      if (game.renderer.viewReady(game.rt)) {
+        present();
+        return;
+      }
+      fightLoading = true;
+      void game.preloadCurrentView().catch(loadError).finally(() => {
+        fightLoading = false;
+        if (!stopped) present();
+      });
+    };
     const stopLoop = startFixedLoop(
       () => {
         // 比赛第一帧等待图像时，模拟保持不动。
@@ -223,53 +248,47 @@ const lobby = new Lobby(overlay, {
         replay.frame([p], runtimeState(game.rt));
       },
       () => {
-        game.setActivePlay(inMatch(game.rt) || game.cutsceneActive());
-        if (!inMatch(game.rt)) {
+        if (fightLoading) return;
+        const match = inMatch(game.rt);
+        game.setActivePlay(match || game.cutsceneActive());
+        if (!match) {
           fightReady = false;
           readyFighters = '';
           readyCutscene = '';
-          game.present();
-          saveCodes(game.rt);
+          presentWhenReady();
           return;
         }
         const fighters = game.fighterKey();
         const cutscene = game.cutsceneActive() ? game.cutsceneKey() : '';
         if (!cutscene) readyCutscene = '';
         if (fightReady && fighters === readyFighters && (!cutscene || cutscene === readyCutscene)) {
-          game.present();
-          saveCodes(game.rt);
+          presentWhenReady();
           return;
         }
         const fighterChanged = !fightReady || fighters !== readyFighters;
         const cutsceneChanged = !!cutscene && cutscene !== readyCutscene;
-        if (!fightLoading && fightReady && fighterChanged && !cutsceneChanged && game.canInstantSwitch()) {
+        if (fightReady && fighterChanged && !cutsceneChanged && game.canInstantSwitch()) {
           game.queueSwitchBackground();
           readyFighters = fighters;
-          game.present();
-          saveCodes(game.rt);
+          present();
           return;
         }
-        if (fightLoading) return;
         fightLoading = true;
-        const load = async (progress: (done: number, total: number) => void) => {
+        const load = async () => {
           if (fighterChanged) {
-            const next = cutsceneChanged ? () => {} : progress;
-            if (fightReady) await game.preloadForSwitch(next);
-            else await game.preloadForFight(next);
+            if (fightReady) await game.preloadForSwitch();
+            else await game.preloadForFight();
           }
-          if (cutsceneChanged) await game.preloadForCutscene(progress);
+          if (cutsceneChanged && !stopped) await game.preloadForCutscene();
         };
-        void withLoading(load)
-          .catch((e) => toast.show(currentFormat('couldNotLoad', { error: String(e) }), 4000))
+        void load()
+          .catch(loadError)
           .finally(() => {
             fightReady = true;
             readyFighters = fighters;
             readyCutscene = cutscene;
             fightLoading = false;
-            if (!stopped) {
-              game.present();
-              saveCodes(game.rt);
-            }
+            if (!stopped) present();
           });
       },
       (next) => game.setNextFrameAt(next),
@@ -353,18 +372,11 @@ const lobby = new Lobby(overlay, {
   },
 });
 
-/** 等待资源任务完成；不渲染任何加载文字或遮罩。 */
-async function withLoading(
-  task: (progress: (done: number, total: number) => void) => Promise<void>,
-): Promise<void> {
-  await task(() => {});
-}
-
 /** 在线游戏进入房间前等待共用素材；不显示加载界面。 */
 async function prepareToPlay(): Promise<boolean> {
   lobby.setLoading(true);
   try {
-    await withLoading((progress) => game.preloadForPlay(progress));
+    await game.preloadForPlay();
     return true;
   } catch (e) {
     lobby.setStatus(currentFormat('couldNotLoad', { error: String(e) }));
@@ -545,7 +557,7 @@ async function watchReplay(id: string, quality?: VideoQuality): Promise<void> {
 // 遮罩和着色器先加载；之后在后台预取共用素材和默认角色，使菜单立即出现。
 lobby.setLoading(true);
 void game
-  .load(() => {})
+  .load()
   .then(() => {
     lobby.setLoading(false);
     // 先请求当前菜单实际绘制的图像，再让共用素材在后台排队。

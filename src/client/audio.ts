@@ -131,12 +131,24 @@ export class AudioOut {
 
   /** 当所有短于 `seconds` 的声音加载完成或失败后完成。 */
   shortLoaded(seconds: number): Promise<void> {
-    const ready = () => this.loadState.every((list, si) => list.every((st, i) => st === 2 || st === 3 || this.durations[si][i] >= seconds));
-    return ready() ? Promise.resolve() : new Promise((r) => this.waiters.push(() => (ready() ? (r(), true) : false)));
+    return new Promise((resolve) => {
+      let remaining = 0;
+      const arrived = () => {
+        if (--remaining === 0) resolve();
+      };
+      this.loadState.forEach((states, si) => states.forEach((state, i) => {
+        if (state === 2 || state === 3 || this.durations[si][i] >= seconds) return;
+        remaining++;
+        const key = `${si}:${i}`;
+        const listeners = this.waiters.get(key) ?? [];
+        listeners.push(arrived);
+        this.waiters.set(key, listeners);
+      }));
+      if (!remaining) resolve();
+    });
   }
 
-  /** 每个等待项在目标加载完成后返回 true，随后被移除。 */
-  private waiters: (() => boolean)[] = [];
+  private waiters = new Map<string, (() => void)[]>();
 
   private want(si: number, i: number): void {
     if (!this.loadState[si] || this.loadState[si][i] === 2) return;
@@ -184,9 +196,9 @@ export class AudioOut {
             if (this.decoded.get(file) === decoded) this.decoded.delete(file);
           }
           this.loading--;
-          this.onProgress?.(++this.loaded, this.total);
+          this.loaded++;
+          this.onProgress?.(this.loaded, this.total);
           this.arrived(si, i);
-          this.waiters = this.waiters.filter((w) => !w());
           if (this.loaded === this.total) for (const r of this.done.splice(0)) r();
           this.pump();
         });
@@ -202,6 +214,11 @@ export class AudioOut {
 
   private arrived(si: number, i: number): void {
     const key = `${si}:${i}`;
+    const listeners = this.waiters.get(key);
+    if (listeners) {
+      this.waiters.delete(key);
+      for (const done of listeners) done();
+    }
     const e = this.pending.get(key);
     const buffer = this.buffers[si][i];
     this.pending.delete(key);
